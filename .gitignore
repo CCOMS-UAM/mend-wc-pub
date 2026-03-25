@@ -3,4 +3,5 @@
 .RData
 .Ruserdata
 /data
-/out
+/out/*
+!/out/figures
