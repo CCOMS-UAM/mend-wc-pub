@@ -3,5 +3,5 @@
 .RData
 .Ruserdata
 /data
-/out/*
-!/out/tables
+/out/models/*
+!/out/models/summary
