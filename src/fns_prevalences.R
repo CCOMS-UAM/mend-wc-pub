@@ -886,25 +886,12 @@ run_ma <- function(outcome) {
       backtransf = TRUE
     )
   
-  #saves pdf
-  
-  pdf_filename <- paste0("out/figures/", outcome, "_forest.pdf")
-  pdf(pdf_filename, width = 12, height = 8)
-  forest(ma)
-  dev.off()  # cerrar PDF
-  
-  # saves R object
-  
-  forest(ma, main = paste("Forest plot -", outcome))
-  fp <- recordPlot()
-  
+
   #output
   
   list(
     ma = ma,
-    summary = summary(ma),
-    forest = fp,
-    pdf_file = pdf_filename
+    summary = summary(ma)
   )
 }
 

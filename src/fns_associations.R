@@ -5,7 +5,7 @@
 run_crude_glm <- 
   function(data, outcome_var, exposure_var, profession, 
            cluster_var, family_type = "poisson",
-           output_dir = "out/mods") {
+           output_dir = "out/models/main") {
     
     if(!dir.exists(output_dir)) {
       dir.create(output_dir, recursive = TRUE)
@@ -264,7 +264,7 @@ run_crude_glm <-
 run_adj_glm <- 
   function(data, outcome_var, exposure_var, confounder_list, profession,
            cluster_var = "loc_2", family_type = "poisson", model_label,
-           output_dir = "out/mods") {
+           output_dir = "out/models/main") {
     
     if (!dir.exists(output_dir)) {
       dir.create(output_dir, recursive = TRUE)

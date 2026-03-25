@@ -15,7 +15,8 @@ knitr::opts_chunk$set(                   # high resolution for non-vector format
   echo = TRUE,
   error = FALSE,
   warning = FALSE,               
-  message = TRUE                
+  message = TRUE,
+  fig.keep = 'none'
 )
 ```
 
@@ -3276,126 +3277,6 @@ gtsave(dose_tbl_haz, "dose_tbl_haz.docx", "out/tables/")
 
 ```
 
-```{r dose haz plot}
-# extract Bs and 95% CIs
-
-trends <- readRDS("out/models/summary/dose_trends.rds")
-
-dose_all_haz <- readRDS("out/models/summary/dose_all_haz.rds")
-
-slope_labels <- 
-  
-  trends |> 
-  filter(adj == "adjusted",
-         out == "dep") |> 
-  mutate(
-    Exposure_Label = case_when(
-      term == "work_30" ~ "Harassment",
-      term == "work_31" ~ "Threats",
-      term == "work_32" ~ "Violence",
-      term == "work_33" ~ "Bullying",
-      TRUE ~ NA_character_
-    )
-  ) |> 
-  filter(term %in% hazards) |> 
-  mutate(
-    Exposure_Label = factor(Exposure_Label,
-                            levels = 
-                              c("Harassment", "Threats", "Violence", "Bullying")
-                            )
-  ) |> 
-  arrange(Exposure_Label)
-  
-
-dose_plot_haz <-
-  
-  dose_all_haz |> 
-  filter(Model == "Adjusted",
-         Outcome == "PHQ-9 score") |> 
-  mutate(
-    Exposure_Label = case_when(
-      Exposure == "work_30" ~ "Sexual harassment",
-      Exposure == "work_31" ~ "Violent threats",
-      Exposure == "work_32" ~ "Physical violence",
-      Exposure == "work_33" ~ "Bullying",
-      TRUE ~ Exposure
-    ),
-    Exposure_Label = factor(
-      Exposure_Label,
-      levels = c("Sexual harassment",
-                 "Violent threats", 
-                 "Physical violence",
-                 "Bullying")
-    )
-  ) |> 
-  group_by(Exposure_Label) |> 
-  mutate(Level = factor(Level, levels = unique(Level))) |> 
-  ungroup() |> 
-  ggplot(aes(x = Level, 
-             y = estimate,
-             group = Outcome)) +
-  geom_point(size = 2) +
-  geom_errorbar(aes(ymin = conf.low, ymax = conf.high),
-                width = 0.1) +
-  geom_smooth(method = "lm",
-              linewidth = 0.6,
-              colour = "black") +
-  facet_wrap(~ Exposure_Label, scales = "free_x") +
-  labs(
-    x = "Exposure level",
-    y = "Depressive symptoms (PHQ-9 score, 0-27)"
-  ) +
-  theme_bw() +
-  theme(
-    axis.text.x = element_text(angle = 45, hjust = 1),
-    legend.position = "bottom"
-  ) +
-  scale_y_continuous(limit = c(0,15),
-                     breaks = seq(0, 15, by = 1)) 
-
-dose_plot_haz <- 
-  
-  dose_plot_haz + 
-  labs(
-    caption = slope_labels |>
-      dplyr::mutate(
-        foot = paste0(
-          Exposure_Label, " slope: B = ", round(estimate, 2),
-          " (95% CI ", round(conf.low, 2), " to ", round(conf.high, 2), ")"
-        )
-      ) |>
-      dplyr::summarise(txt = paste(foot, collapse = "; ")) |>
-      # Replace all periods with the Unicode midpoint
-      dplyr::mutate(txt = gsub("\\.", "\u00B7", txt)) |> 
-      dplyr::pull(txt)
-  ) +
-  theme(plot.caption = element_text(hjust = 0))
-
-ggsave(filename = "dose_response_haz.pdf",
-       plot = dose_plot_haz,
-       device = "pdf",
-       path = "out/figures/",
-       scale = 3,
-       width = 140,
-       height = 70,
-       units = "mm",
-       dpi = 320
-       )
-
-# Supplementary material
-
-ragg::agg_png("out/figures/dose_response_haz.png",
-              width = 9,
-              height = 7,
-              units = "in",
-              res = 600,
-              scaling = 0.8)
-
-print(dose_plot_haz)
-
-dev.off()
-```
-
 ## Demands
 
 ```{r dose dem prep}
@@ -3532,116 +3413,6 @@ dose_tbl_dem <-
 gtsave(dose_tbl_dem, "dose_tbl_dem.docx", "out/tables/")
 ```
 
-```{r dose dem plot}
-# extract Bs and 95% CIs
-
-trends <- readRDS("out/models/summary/dose_trends.rds")
-
-
-dose_all_dem <- readRDS("out/models/summary/dose_all_dem.rds")
-
-slope_labels <- 
-  
-  trends |> 
-  filter(adj == "adjusted",
-         out == "dep") |> 
-  mutate(
-    Exposure_Label = case_when(
-      term == "work_8" ~ "Hours",
-      term == "work_11" ~ "Nights",
-      term == "work_23" ~ "Deadlines",
-      term == "work_24" ~ "Angry",
-      TRUE ~ NA_character_
-    )
-  ) |> 
-  filter(term %in% demands) |> 
-  mutate(
-    Exposure_Label = factor(Exposure_Label,
-                            levels = c("Hours", "Nights", "Deadlines", "Angry"))
-  ) |> 
-  arrange(Exposure_Label)
-  
-
-dose_plot_dem <- 
-  
-  dose_all_dem |> 
-  filter(Model == "Adjusted",
-         Exposure != "work_12",
-         Outcome == "PHQ-9 score") |> 
-  mutate(
-    Exposure_Label = case_when(
-      Exposure == "work_8"  ~ "Weekly working hours",
-      Exposure == "work_11" ~ "Night shift",
-      Exposure == "work_23" ~ "Tight deadlines",
-      Exposure == "work_24" ~ "Angry patients",
-      TRUE ~ Exposure
-    ),
-    Exposure_Label = factor(
-      Exposure_Label,
-      levels = c(
-        "Weekly working hours",
-        "Night shift",
-        "Tight deadlines",
-        "Angry patients"
-      )
-    )
-  ) |> 
-  group_by(Exposure_Label) |> 
-  mutate(Level = factor(Level, levels = unique(Level))) |> 
-  ungroup() |> 
-  ggplot(aes(x = Level, 
-             y = estimate,
-             group = Outcome)) +
-  geom_point(size = 2) +
-  geom_errorbar(aes(ymin = conf.low, ymax = conf.high),
-                width = 0.1) +
-  geom_smooth(method = "lm",
-              linewidth = 0.6,
-              colour = "black") +
-  facet_wrap(~ Exposure_Label, scales = "free_x") +
-  labs(
-    x = "Exposure level",
-    y = "Depressive symptoms (PHQ-9 score, 0-27)"
-  ) +
-  theme_bw() +
-  theme(
-    axis.text.x = element_text(angle = 45, hjust = 1),
-    legend.position = "bottom"
-  ) +
-  scale_y_continuous(limit = c(0,15),
-                     breaks = seq(0, 15, by = 1)) 
-
-dose_plot_dem <- 
-  
-  dose_plot_dem + # Bs in footnote
-  labs(
-    caption = paste0(slope_labels |>
-      dplyr::mutate(
-        foot = paste0(
-          Exposure_Label, " slope: B = ", round(estimate, 2),
-          " (95% CI ", round(conf.low, 2), " to ", round(conf.high, 2), ")"
-        )
-      ) |>
-      dplyr::summarise(txt = paste(foot, collapse = "; ")) |>
-        
-      # Replace all periods with the Unicode midpoint
-      dplyr::mutate(txt = gsub("\\.", "\u00B7", txt)) |> 
-      dplyr::pull(txt), " Shift work original response options were yes no and dose-response models were not performed."
-  )) +
-  theme(plot.caption = element_text(hjust = 0))
-
-ggsave(filename = "dose_response_dem.pdf",
-       plot = dose_plot_dem,
-       device = "pdf",
-       path = "out/figures/",
-       scale = 3,
-       width = 140,
-       height = 70,
-       units = "mm",
-       dpi = 320
-       )
-
-```
 
 ## Resources
 
@@ -3768,117 +3539,6 @@ dose_tbl_res <-
     cols_align(align = "center", -Level)
 
 gtsave(dose_tbl_res, "dose_tbl_res.docx", "out/tables/")
-
-```
-
-```{r dose res plot}
-# extract Bs and 95% CIs
-
-trends <- readRDS("out/models/summary/dose_trends.rds")
-
-dose_all_res <- readRDS("out/models/summary/dose_all_res.rds")
-
-slope_labels <- 
-  
-  trends |> 
-  filter(adj == "adjusted",
-         out == "dep") |> 
-  mutate(
-    Exposure_Label = case_when(
-      term == "work_19"  ~ "Influence",
-      term == "work_20" ~ "Breaks",
-      term == "work_21" ~ "Colleagues",
-      term == "work_22" ~ "Superiors",
-      TRUE ~ NA_character_
-    )
-  ) |> 
-  filter(term %in% resources) |> 
-  mutate(
-    Exposure_Label = factor(Exposure_Label, 
-                            levels = 
-                              c("Influence", 
-                                "Breaks", 
-                                "Colleagues", 
-                                "Superiors"))
-    ) |> 
-  arrange(Exposure_Label)
-  
-
-dose_plot_res <- 
-  
-  dose_all_res |> 
-  filter(Model == "Adjusted",
-         Outcome == "PHQ-9 score") |> 
-  mutate(
-    Exposure_Label = case_when(
-      Exposure == "work_19"  ~ "Influence over work",
-      Exposure == "work_20" ~ "Influence over work (breaks)",
-      Exposure == "work_21" ~ "Colleague support",
-      Exposure == "work_22" ~ "Support from superiors",
-      TRUE ~ Exposure
-    ),
-    Exposure_Label = factor(
-      Exposure_Label,
-      levels = c(
-        "Influence over work",
-        "Influence over work (breaks)",
-        "Colleague support",
-        "Support from superiors"
-      )
-    )
-  ) |> 
-  group_by(Exposure_Label) |> 
-  mutate(Level = factor(Level, levels = unique(Level))) |> 
-  ungroup() |> 
-  ggplot(aes(x = Level, 
-             y = estimate,
-             group = Outcome)) +
-  geom_point(size = 2) +
-  geom_errorbar(aes(ymin = conf.low, ymax = conf.high),
-                width = 0.1) +
-  geom_smooth(method = "lm",
-              linewidth = 0.6,
-              colour = "black") +
-  facet_wrap(~ Exposure_Label, scales = "free_x") +
-  labs(
-    x = "Exposure level",
-    y = "Depressive symptoms (PHQ-9 score, 0-27)"
-  ) +
-  theme_bw() +
-  theme(
-    axis.text.x = element_text(angle = 45, hjust = 1),
-    legend.position = "bottom"
-  ) +
-  scale_y_continuous(limit = c(0,15),
-                     breaks = seq(0, 15, by = 1))
-dose_plot_res <- 
-  dose_plot_res + # Bs in footnote
-  labs(
-    caption = slope_labels |>
-      dplyr::mutate(
-        foot = paste0(
-          Exposure_Label, " slope: B = ", round(estimate, 2),
-          " (95% CI ", round(conf.low, 2), " to ", round(conf.high, 2), ")"
-        )
-      ) |>
-      dplyr::summarise(txt = paste(foot, collapse = "; ")) |>
-      # Replace all periods with the Unicode midpoint
-      dplyr::mutate(txt = gsub("\\.", "\u00B7", txt)) |> 
-      dplyr::pull(txt)
-  ) +
-  theme(plot.caption = element_text(hjust = 0))
-
-ggsave(filename = "dose_response_res.pdf",
-       plot = dose_plot_res,
-       device = "pdf",
-       path = "out/figures/",
-       scale = 3,
-       width = 140,
-       height = 70,
-       units = "mm",
-       dpi = 320
-       )
-
 
 ```
 
@@ -4108,6 +3768,348 @@ dev.off()
 rm(forest_dose)
 ```
 
+```{r dose haz plot}
+# extract Bs and 95% CIs
+
+trends <- readRDS("out/models/summary/dose_trends.rds")
+
+dose_all_haz <- readRDS("out/models/summary/dose_all_haz.rds")
+
+slope_labels <- 
+  
+  trends |> 
+  filter(adj == "adjusted",
+         out == "dep") |> 
+  mutate(
+    Exposure_Label = case_when(
+      term == "work_30" ~ "Harassment",
+      term == "work_31" ~ "Threats",
+      term == "work_32" ~ "Violence",
+      term == "work_33" ~ "Bullying",
+      TRUE ~ NA_character_
+    )
+  ) |> 
+  filter(term %in% hazards) |> 
+  mutate(
+    Exposure_Label = factor(Exposure_Label,
+                            levels = 
+                              c("Harassment", "Threats", "Violence", "Bullying")
+                            )
+  ) |> 
+  arrange(Exposure_Label)
+  
+
+dose_plot_haz <-
+  
+  dose_all_haz |> 
+  filter(Model == "Adjusted",
+         Outcome == "PHQ-9 score") |> 
+  mutate(
+    Exposure_Label = case_when(
+      Exposure == "work_30" ~ "Sexual harassment",
+      Exposure == "work_31" ~ "Violent threats",
+      Exposure == "work_32" ~ "Physical violence",
+      Exposure == "work_33" ~ "Bullying",
+      TRUE ~ Exposure
+    ),
+    Exposure_Label = factor(
+      Exposure_Label,
+      levels = c("Sexual harassment",
+                 "Violent threats", 
+                 "Physical violence",
+                 "Bullying")
+    )
+  ) |> 
+  group_by(Exposure_Label) |> 
+  mutate(Level = factor(Level, levels = unique(Level))) |> 
+  ungroup() |> 
+  ggplot(aes(x = Level, 
+             y = estimate,
+             group = Outcome)) +
+  geom_point(size = 2) +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high),
+                width = 0.1) +
+  geom_smooth(method = "lm",
+              linewidth = 0.6,
+              colour = "black") +
+  facet_wrap(~ Exposure_Label, scales = "free_x") +
+  labs(
+    x = "Exposure level",
+    y = "Depressive symptoms (PHQ-9 score, 0-27)"
+  ) +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "bottom"
+  ) +
+  scale_y_continuous(limit = c(0,15),
+                     breaks = seq(0, 15, by = 1)) 
+
+dose_plot_haz <- 
+  
+  dose_plot_haz + 
+  labs(
+    caption = slope_labels |>
+      dplyr::mutate(
+        foot = paste0(
+          Exposure_Label, " slope: B = ", round(estimate, 2),
+          " (95% CI ", round(conf.low, 2), " to ", round(conf.high, 2), ")"
+        )
+      ) |>
+      dplyr::summarise(txt = paste(foot, collapse = "; ")) |>
+      # Replace all periods with the Unicode midpoint
+      dplyr::mutate(txt = gsub("\\.", "\u00B7", txt)) |> 
+      dplyr::pull(txt)
+  ) +
+  theme(plot.caption = element_text(hjust = 0))
+
+ggsave(filename = "dose_response_haz.pdf",
+       plot = dose_plot_haz,
+       device = "pdf",
+       path = "out/figures/",
+       scale = 3,
+       width = 140,
+       height = 70,
+       units = "mm",
+       dpi = 320
+       )
+
+# Supplementary material
+
+ragg::agg_png("out/figures/dose_response_haz.png",
+              width = 9,
+              height = 7,
+              units = "in",
+              res = 600,
+              scaling = 0.8)
+
+print(dose_plot_haz)
+
+dev.off()
+```
+
+```{r dose dem plot}
+# extract Bs and 95% CIs
+
+trends <- readRDS("out/models/summary/dose_trends.rds")
+
+
+dose_all_dem <- readRDS("out/models/summary/dose_all_dem.rds")
+
+slope_labels <- 
+  
+  trends |> 
+  filter(adj == "adjusted",
+         out == "dep") |> 
+  mutate(
+    Exposure_Label = case_when(
+      term == "work_8" ~ "Hours",
+      term == "work_11" ~ "Nights",
+      term == "work_23" ~ "Deadlines",
+      term == "work_24" ~ "Angry",
+      TRUE ~ NA_character_
+    )
+  ) |> 
+  filter(term %in% demands) |> 
+  mutate(
+    Exposure_Label = factor(Exposure_Label,
+                            levels = c("Hours", "Nights", "Deadlines", "Angry"))
+  ) |> 
+  arrange(Exposure_Label)
+  
+
+dose_plot_dem <- 
+  
+  dose_all_dem |> 
+  filter(Model == "Adjusted",
+         Exposure != "work_12",
+         Outcome == "PHQ-9 score") |> 
+  mutate(
+    Exposure_Label = case_when(
+      Exposure == "work_8"  ~ "Weekly working hours",
+      Exposure == "work_11" ~ "Night shift",
+      Exposure == "work_23" ~ "Tight deadlines",
+      Exposure == "work_24" ~ "Angry patients",
+      TRUE ~ Exposure
+    ),
+    Exposure_Label = factor(
+      Exposure_Label,
+      levels = c(
+        "Weekly working hours",
+        "Night shift",
+        "Tight deadlines",
+        "Angry patients"
+      )
+    )
+  ) |> 
+  group_by(Exposure_Label) |> 
+  mutate(Level = factor(Level, levels = unique(Level))) |> 
+  ungroup() |> 
+  ggplot(aes(x = Level, 
+             y = estimate,
+             group = Outcome)) +
+  geom_point(size = 2) +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high),
+                width = 0.1) +
+  geom_smooth(method = "lm",
+              linewidth = 0.6,
+              colour = "black") +
+  facet_wrap(~ Exposure_Label, scales = "free_x") +
+  labs(
+    x = "Exposure level",
+    y = "Depressive symptoms (PHQ-9 score, 0-27)"
+  ) +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "bottom"
+  ) +
+  scale_y_continuous(limit = c(0,15),
+                     breaks = seq(0, 15, by = 1)) 
+
+dose_plot_dem <- 
+  
+  dose_plot_dem + # Bs in footnote
+  labs(
+    caption = paste0(slope_labels |>
+      dplyr::mutate(
+        foot = paste0(
+          Exposure_Label, " slope: B = ", round(estimate, 2),
+          " (95% CI ", round(conf.low, 2), " to ", round(conf.high, 2), ")"
+        )
+      ) |>
+      dplyr::summarise(txt = paste(foot, collapse = "; ")) |>
+        
+      # Replace all periods with the Unicode midpoint
+      dplyr::mutate(txt = gsub("\\.", "\u00B7", txt)) |> 
+      dplyr::pull(txt), " Shift work original response options were yes no and dose-response models were not performed."
+  )) +
+  theme(plot.caption = element_text(hjust = 0))
+
+ggsave(filename = "dose_response_dem.pdf",
+       plot = dose_plot_dem,
+       device = "pdf",
+       path = "out/figures/",
+       scale = 3,
+       width = 140,
+       height = 70,
+       units = "mm",
+       dpi = 320
+       )
+
+```
+
+```{r dose res plot}
+# extract Bs and 95% CIs
+
+trends <- readRDS("out/models/summary/dose_trends.rds")
+
+dose_all_res <- readRDS("out/models/summary/dose_all_res.rds")
+
+slope_labels <- 
+  
+  trends |> 
+  filter(adj == "adjusted",
+         out == "dep") |> 
+  mutate(
+    Exposure_Label = case_when(
+      term == "work_19"  ~ "Influence",
+      term == "work_20" ~ "Breaks",
+      term == "work_21" ~ "Colleagues",
+      term == "work_22" ~ "Superiors",
+      TRUE ~ NA_character_
+    )
+  ) |> 
+  filter(term %in% resources) |> 
+  mutate(
+    Exposure_Label = factor(Exposure_Label, 
+                            levels = 
+                              c("Influence", 
+                                "Breaks", 
+                                "Colleagues", 
+                                "Superiors"))
+    ) |> 
+  arrange(Exposure_Label)
+  
+
+dose_plot_res <- 
+  
+  dose_all_res |> 
+  filter(Model == "Adjusted",
+         Outcome == "PHQ-9 score") |> 
+  mutate(
+    Exposure_Label = case_when(
+      Exposure == "work_19"  ~ "Influence over work",
+      Exposure == "work_20" ~ "Influence over work (breaks)",
+      Exposure == "work_21" ~ "Colleague support",
+      Exposure == "work_22" ~ "Support from superiors",
+      TRUE ~ Exposure
+    ),
+    Exposure_Label = factor(
+      Exposure_Label,
+      levels = c(
+        "Influence over work",
+        "Influence over work (breaks)",
+        "Colleague support",
+        "Support from superiors"
+      )
+    )
+  ) |> 
+  group_by(Exposure_Label) |> 
+  mutate(Level = factor(Level, levels = unique(Level))) |> 
+  ungroup() |> 
+  ggplot(aes(x = Level, 
+             y = estimate,
+             group = Outcome)) +
+  geom_point(size = 2) +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high),
+                width = 0.1) +
+  geom_smooth(method = "lm",
+              linewidth = 0.6,
+              colour = "black") +
+  facet_wrap(~ Exposure_Label, scales = "free_x") +
+  labs(
+    x = "Exposure level",
+    y = "Depressive symptoms (PHQ-9 score, 0-27)"
+  ) +
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "bottom"
+  ) +
+  scale_y_continuous(limit = c(0,15),
+                     breaks = seq(0, 15, by = 1))
+dose_plot_res <- 
+  dose_plot_res + # Bs in footnote
+  labs(
+    caption = slope_labels |>
+      dplyr::mutate(
+        foot = paste0(
+          Exposure_Label, " slope: B = ", round(estimate, 2),
+          " (95% CI ", round(conf.low, 2), " to ", round(conf.high, 2), ")"
+        )
+      ) |>
+      dplyr::summarise(txt = paste(foot, collapse = "; ")) |>
+      # Replace all periods with the Unicode midpoint
+      dplyr::mutate(txt = gsub("\\.", "\u00B7", txt)) |> 
+      dplyr::pull(txt)
+  ) +
+  theme(plot.caption = element_text(hjust = 0))
+
+ggsave(filename = "dose_response_res.pdf",
+       plot = dose_plot_res,
+       device = "pdf",
+       path = "out/figures/",
+       scale = 3,
+       width = 140,
+       height = 70,
+       units = "mm",
+       dpi = 320
+       )
+
+
+```
+
 # Moderation: protocols
 
 ## Linear models multiplicative interaction
@@ -4202,7 +4204,7 @@ moder_all |> # clean and export
     )
     ) |> 
   as_tibble() |> 
-  saveRDS("out/models/inter/moder_all_haz.rds")
+  saveRDS("out/models/summary/moder_all_final.rds")
 ```
 
 ```{r moder haz plot}
@@ -4418,12 +4420,17 @@ lrt_results <-
     )
   )
 
-lrt_table_all <- lrt_results |>
+lrt_table_all <- 
+  
+  lrt_results |>
   filter(!purrr::map_lgl(lrt, is.null)) |>
   select(lrt) |>
   tidyr::unnest(lrt)
 
-lrt_table_all <- lrt_table_all |>
+
+lrt_table_all <- 
+  
+  lrt_table_all |>
   group_by(Outcome) |>
   mutate(
     p_fdr = p.adjust(p_value, method = "fdr")
@@ -4481,9 +4488,9 @@ for(col in target_cols){
     x = ft,
     j = col,
     value = as_paragraph(
-      as_chunk("\u03c7", props = fp_text(italic = TRUE)), # Chi symbol
+      as_chunk("\u03c7", props = officer::fp_text(italic = TRUE)), # Chi symbol
       as_chunk("2", 
-               props = fp_text(vertical.align = "superscript")),#Squared
+               props = officer::fp_text(vertical.align = "superscript")),#Squared
       as_chunk("(4)"), # Degrees of freedom
       # This removes "Chi-squared (4)", keeping the " = X, p = Y"
       as_chunk(gsub("Chi-squared \\(4\\)", "", tab_wide[[col]]))
