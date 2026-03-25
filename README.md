@@ -77,8 +77,8 @@ To set up the project locally:
 
 1. Clone the repository:
 
-   git clone https://github.com/USERNAME/ukr-hcws-violence.git
-   cd ukr-hcws-violence
+   git clone https://github.com/USERNAME/mend-wc-pub.git
+   cd mend-wc-pub
 
 3. Open the project in R or RStudio.
 
