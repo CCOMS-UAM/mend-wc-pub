@@ -1,0 +1,2876 @@
+---
+title: "MeND working conditions manuscript: response to reviewers (R1)"
+author: "Roberto Mediavilla and Vicente Arrona"
+date: "`r Sys.Date()`"
+output: 
+  html_document: 
+    toc: true
+    toc_float: true
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup}
+knitr::opts_chunk$set(
+  fig.path = "out/",  
+  fig.ext = "pdf",
+  fig.height = 12,
+  fig.width = 16,
+  dpi = 300,                     # high resolution for non-vector formats
+  echo = TRUE,                  
+  warning = TRUE,               
+  message = TRUE                
+)
+```
+
+```{r source}
+
+source("src/setup.R") # updated with new packages
+source("src/fns_r1.R") # new functions to work with mids
+source("src/fns_associations.R") # old functions -still required
+
+ds <- # dataset
+  
+  readRDS("data/who_hcw_survey_clean.rds")
+
+cb <- # codebook
+
+  read.csv("ext/data_mapping.csv", na.strings = "")
+
+who_ipw_population <- # popuation data
+  
+  readRDS("ext/who_ipw_population.rds")
+
+ipw_sample <- # sample data
+  
+  readRDS("ext/ipw_sample.rds")
+
+# weights to DS
+
+w <- 
+  
+  readRDS("ext/weights.rds")
+
+# total denominator
+who_n_loc <- 
+  
+  readRDS("ext/who_n_loc.rds")
+
+```
+
+```{r weights}
+ds <- left_join(ds, w, by = "user_id")
+```
+
+# Preprocessing
+
+This is inherited from analysis.Rmd for consistency, with a few minor tweaks to make new functions run on mids objects
+
+```{r var lists}
+
+# scdm
+
+scdm <- c("scdm_1_rec",
+          "scdm_2",
+          "work_1",
+          "work_2",
+          "work_5_rec",
+          "work_7")
+
+scdm_ext <- c("scdm_1_rec",
+              "scdm_2_rec",
+              "scdm_5_dic",
+              "scdm_6",
+              "work_1",
+              "work_2",
+              "work_5_rec",
+              "work_7",
+              "work_13",
+              "work_14",
+              "work_16")
+
+# MH outcomes
+
+out_dic <- c("phq_co", "gad_co", "suic_idea", "cage_co")
+
+out <- c("phq_sc", "gad_sc", "mh_phq_9", "cage_sc")
+
+out_poisson <- c("phq_co_poi", "gad_co_poi", "suic_idea_poi", "cage_co_poi")
+
+named_outcomes <- c(
+  "Probable Depression" = "phq_co",
+  "Probable Anxiety"    = "gad_co",
+  "Alcohol dependence"  = "cage_co",
+  "Suicidal thoughts"    = "suic_idea"
+)
+
+
+# Job demands
+
+demands <- c("work_8", "work_11", "work_12", "work_23", "work_24") 
+demands_num <- c(paste0(demands, "_num"))[c(1, 2, 4, 5)] # work_12 is binary
+demands_dic <- c(paste0(demands, "_dic")) 
+
+named_demands <- c(
+  "Extended working hours"    = "work_8_dic",
+  "Frequent night shifts"    = "work_11_dic",
+  "Regular shift work" = "work_12_dic",
+  "Tight deadlines" = "work_23_dic",
+  "Angry patients or relatives" = "work_24_dic")
+
+# Job hazards
+
+hazards <- c("work_30", "work_31", "work_32", "work_33")
+hazards_dic <- c(paste0(hazards, "_dic"))
+
+hazards_num <- c(paste0(hazards, "_num"))
+
+named_hazards <- c(
+  "Sexual harassment"    = "work_30_dic",
+  "Violent threats"    = "work_31_dic",
+  "Physical violence" = "work_32_dic",
+  "Bullying" = "work_33_dic"
+)
+
+# Organisational support structures
+
+protocols <- c("work_25", "work_26", "work_27", "work_28", "work_29")
+protocols_dic <- c(paste0(protocols, "_dic"))
+
+named_protocols <- c(
+  "Work council or union" = "work_25_dic",
+  "Employee feedback"    = "work_26_dic",
+  "Stress action plan"    = "work_27_dic",
+  "Harassment protocol" = "work_28_dic",
+  "Violence protocol" = "work_29_dic"
+)
+
+# Job Resources
+
+resources <- c("work_19", "work_20", "work_21", "work_22")
+resources_dic <- c(paste0(resources, "_dic"))
+
+resources_num <- c(paste0(resources, "_num"))
+
+named_resources <- c(
+  "Influence over work" = "work_19_dic",
+  "Influence over work (breaks)"    = "work_20_dic",
+  "Colleague support"    = "work_21_dic",
+  "Support from superiors" = "work_22_dic"
+)
+
+# define exposures
+
+all_exposures <- c(demands_dic, hazards_dic, resources_dic, protocols_dic)
+
+all_exposures_bis <- c(demands, hazards, resources, protocols)
+
+# Covars
+
+covs_1 <- c("scdm_1_rec",
+            "scdm_2", # "Other" gender excluded before MICE; _rec no longer required
+            "scdm_5_dic",
+            "scdm_6",
+            "work_1",
+            "work_2",
+            "work_3_rec",
+            "work_4_dic",
+            "work_5_rec",
+            "work_7")
+
+covs_2 <- c("loc_2")
+
+# exposure order
+
+exposure_order <-  
+  c(demands_dic, hazards_dic, resources_dic, protocols_dic)
+
+exposure_order_named <- 
+  c("Extended working hours",
+    "Frequent night shifts",
+    "Regular shift work",
+    "Tight deadlines",
+    "Angry patients or relatives",
+    "Sexual harassment",
+    "Violent threats",
+    "Physical violence", 
+    "Bullying",
+    "Influence over work",
+    "Influence over work (breaks)",
+    "Colleague support",
+    "Support from superiors",
+    "Work council or union",
+    "Employee feedback",
+    "Stress action plan",
+    "Harassment protocol",
+    "Violence protocol")
+
+
+exposure_order_dose <- 
+  c("Weekly working hours",
+    "Night shift frequency",
+    "Tight deadlines frequency",
+    "Angry patients frequency",
+    "Sexual harassment",
+    "Violent threats",
+    "Physical violence", 
+    "Bullying",
+    "Influence over work",
+    "Influence over work (breaks)",
+    "Colleague support",
+    "Support from superiors")
+
+
+# This will be needed
+exposure_metadata <- 
+  
+  bind_rows(
+  enframe(
+    named_demands, 
+    name = "Label", 
+    value = "Column"
+    )  |>
+    mutate(Category = "Job Demands"),
+  enframe(
+    named_hazards, 
+    name = "Label", 
+    value = "Column"
+    )  |>  
+    mutate(Category = "Job Hazards"),
+  enframe(
+    named_resources, 
+    name = "Label", 
+    value = "Column"
+    )  |> 
+    mutate(Category = "Job Resources"),
+  enframe(
+    named_protocols, 
+    name = "Label", 
+    value = "Column"
+    )  |> 
+    mutate(Category = "Organisational support structures")
+)
+
+# outcome order
+
+outcome_order <- 
+  c("Depression", "Anxiety", "Alcohol dependence", "Suicidal thoughts")
+```
+
+```{r preprocess}
+
+# some responses are too long
+
+ds <- 
+  
+  ds  |> 
+  mutate(work_7 = fct_recode(
+    work_7,
+    "Public and private sectors" = 
+      "I work in both the public sector and in the private sector (or I work in the public sector and I am self-employed)",
+    "Private sector only" = 
+      "I work in the private healthcare sector only (I do not work in the public sector)",
+    "Public sector only" = 
+      "I work in the public healthcare sector only (I do not work in the private sector, nor am I self-employed)"
+  ))
+
+ds <- 
+  
+  ds |> 
+  mutate(scdm_1 = fct_recode(scdm_1, "Under 20" = "Less than 20 years old"))
+
+ds <- 
+  
+  ds |> 
+  mutate(work_5 = fct_recode(
+    work_5,
+    "Extra-hospital emergencies" = 
+      "Emergency care outside hospital (e.g., ambulance)",
+    "In-hospital care" = 
+      "Inpatient care (hospital services)",
+    "Outpatient primary care" = 
+      "Primary care (outpatient services)",
+    "Outpatient secondary care" =
+      "Secondary care (outpatient services)"
+  ))
+
+ds <- 
+  
+  ds |> 
+  mutate(work_5_rec = fct_collapse( 
+    work_5,
+    "Inpatient" = c("Emergency department",
+                    "In-hospital care"),
+    "Outpatient" = c("Outpatient primary care",
+                     "Outpatient secondary care"),
+    "Other" = c("Extra-hospital emergencies",
+                "Other")
+  )
+  )
+
+ds <- 
+  
+  ds |> 
+  mutate(work_11 = fct_recode(
+    work_11,
+    "Daily" = 
+      "Every day",
+    "Almost daily" = 
+      "At least 4 days a week, but not every day",
+    "2-3 days/week" = 
+      "2 or 3 days a week",
+    "Almost weekly" = 
+      "Almost every week",
+    "1-2 times/month" =
+      "Once or twice a month",
+    "Less than monthly" =
+    "Less than once a month",
+    "Never/Rarely" = 
+      "Never or very rarely (e.g., once or twice a year)"
+  ))
+
+ds <- 
+  
+  ds |> 
+  mutate(work_8 = fct_recode(
+    work_8,
+    "< 11 h" = 
+      "Less than 11 hours",
+    "11-20 h" = 
+      "11-20 hours",
+    "21-30 h" = 
+      "21-30 hours",
+    "31-40 h" = 
+      "31-40 hours",
+    "41-50 h" =
+      "41-50 hours",
+    "51-60 h" = 
+      "51-60 hours",
+    "61-70 h" = 
+      "61-70 hours",
+    "> 70 h" = 
+      "More than 70 hours"
+  ))
+
+# Some variables and exposures require processing
+
+ds <- 
+  
+  ds |> 
+  
+  # Household 
+  
+  mutate(scdm_5_dic = case_when(
+    str_detect(scdm_5, "with children") ~ "Has children",
+    str_detect(scdm_5, "without children") ~ "No children",
+    TRUE ~ NA
+    ),
+    scdm_5_dic = factor(scdm_5_dic,
+                        levels = c("Has children", "No children"),
+                        ordered = FALSE)
+  ) |>
+  
+  # recode length of service
+  
+  mutate(work_3_rec = fct_collapse(
+    work_3,
+    "5 years or less" = c("Less than 1 year", "1-3 years", "4-5 years"),
+    "More than 10 years" = c("11-20 years", "21-30 years", "31-40 years",
+                             "More than 40 years")
+    )
+  ) |> 
+  
+  # job positions
+  
+  mutate(
+    work_4_dic = if_else(work_4 == "One",
+                         "One",
+                         "More than one"),
+    work_4_dic = factor(work_4_dic,
+                        levels = c("One", "More than one"))
+  ) |> 
+  
+  # recode working hours
+  
+  mutate(
+    work_8_dic = case_when(as.numeric(work_8) <= 5 ~ "No", # <= 50h
+                           as.numeric(work_8) > 5 ~ "Yes"), # > 50h
+    work_8_dic = factor(work_8_dic, levels = c("No", "Yes"))
+  ) |> 
+  
+  # recode night work
+  
+  mutate(
+    work_11_dic = 
+      case_when(as.numeric(work_11) > 5 ~ "No", # 1 or 2x a month or less
+                as.numeric(work_11) <= 5 ~ "Yes"), # Almost every week and more
+    work_11_dic = factor(work_11_dic, levels = c("No", "Yes")),
+    work_11 = fct_rev(work_11)
+  ) |> 
+  
+  # name var for shifts
+  
+  mutate(work_12_dic = factor(work_12, levels = c("No", "Yes"))
+  ) |> 
+  
+  # create dichotomic for contract type
+  
+  mutate(work_16_dic = fct_recode(work_16,
+                                  "Yes" = "Temporary contract",
+                                  "No" = "Fixed contract"),
+         work_16_dic = factor(work_16_dic,
+                              levels = c("No", "Yes"),
+                              ordered = FALSE)
+  ) |> 
+  
+  # recode managing patient anger
+  
+  mutate(
+    across(
+      all_of(c("work_23", "work_24")),
+      ~ factor(
+        fct_collapse(.x,
+                     "Yes" = c("Around 1/4 of the time",
+                               "Around half of the time",
+                               "Around 3/4 of the time",
+                               "Almost all of the time",
+                               "All of the time"),
+                     "No" = c("Never",
+                              "Almost never")),
+                     levels = c("No", "Yes"),
+                     ordered = FALSE),
+        .names = "{.col}_dic"
+        )
+      ) |> 
+  
+  # recode violence
+  
+   mutate(
+    across(
+      all_of(hazards),
+      ~ factor(
+        fct_collapse(.x,
+                     "Yes" = c("Yes, daily", 
+                             "Yes, weekly", 
+                             "Yes, monthly", 
+                             "Yes, a few times"),
+                     "No" = "No"
+        ),
+        levels = c("No", "Yes"), ordered = FALSE
+      ),
+      .names = "{.col}_dic"
+    )
+  ) |>
+  
+  # Recode protocols, drop "Do not know", ensure factor levels
+ 
+   mutate(
+    across(
+      all_of(protocols),
+      ~ fct_recode(.x, NULL = "Do not know"),
+      .names = "{.col}_dic"
+    )
+  ) |> 
+
+  # relevel protocols
+
+  mutate(
+    across(
+      all_of(protocols_dic),
+      ~ fct_relevel(.x, "No")
+    )
+  ) |> 
+  
+  # recode protective factors (except w-l balance)
+  
+  mutate(
+    across(
+      all_of(c("work_19", "work_20", "work_21", "work_22")),
+      ~ factor(
+        fct_collapse(.x,
+                     "No" = c("Sometimes", "Seldom", "Never / Hardly ever"),
+                     "Yes" = c("Always", "Often"),
+        ),
+        levels = c("No", "Yes"), ordered = FALSE
+      ),
+      .names = "{col}_dic"
+    )
+  ) |> 
+  
+  # recode work-life balance
+  
+  mutate(
+    work_34_dic = case_when(as.numeric(work_34) <= 3 ~ "No",
+                            as.numeric(work_34) > 3 ~ "Yes"),
+    work_34_dic = factor(work_34_dic, levels = c("No", "Yes"))
+  ) |> 
+  
+  # create numeric variables
+  
+  mutate(
+    across(
+      all_of(hazards),
+      ~ case_when(
+        .x == "No"                ~ 0,
+        .x == "Yes, a few times"  ~ 1,
+        .x == "Yes, monthly"      ~ 2,
+        .x == "Yes, weekly"       ~ 3,
+        .x == "Yes, daily"        ~ 4,
+        TRUE                      ~ NA_real_
+        ),
+      .names = "{.col}_num"
+      )
+    ) |> 
+  mutate(
+    across(
+      all_of(demands) & !all_of("work_12"), # work_12 is binary
+      \(x) as.numeric(x) - 1, # 0 as reference
+    .names = "{.col}_num")) |> 
+  mutate(
+    across(
+      all_of(resources),
+      \(x) as.numeric(x) - 1, # 0 as reference
+    .names = "{.col}_num")) |> 
+  
+  # create poisson outcomes
+
+  mutate(
+    across(
+      all_of(out_dic),
+      \(x) case_when(x == "Yes" ~ 1,
+                     x == "No"  ~ 0,
+                     TRUE       ~ NA_real_),
+      .names = "{.col}_poi"
+    )
+  )
+
+
+```
+
+```{r dsw}
+# I need this dataset for comparative weighted analyses
+
+ds_w <- 
+  
+  ds |> 
+  drop_na(w_country_work_sex)
+
+```
+
+```{r var labs}
+# final labels here, following this code:
+
+variable_labels <- readxl::read_excel("ext/var_labels_who_survey.xlsx")
+
+for (i in 1:nrow(variable_labels)) {
+  uuid <- variable_labels$Question_uuid[i]
+  label <-  variable_labels$Label[i]
+  ds[[uuid]] <- sjlabelled::set_label(ds[[uuid]], label)
+}
+
+rm(variable_labels,
+   i,
+   uuid,
+   label)
+
+
+```
+
+# Missing data
+
+This analysis was performed in the original md file.
+
+```{r miss old}
+var_names_orig <- names(ds)
+
+names(ds) <- paste0("Item ", seq_along(ds))
+
+var_names <-
+  ds |> 
+  select(1:95) |> 
+  select(-c("Item 1", 
+            "Item 2", 
+            "Item 3", 
+            "Item 4",
+            "Item 5",
+            "Item 6",
+            "Item 7",
+            "Item 8",
+            "Item 9",
+            "Item 11",
+            "Item 12",
+            "Item 13",
+            "Item 14",
+            "Item 15",
+            "Item 17",
+            "Item 18",
+            "Item 24",
+            "Item 25",
+            "Item 28",
+            "Item 30",
+            "Item 31",
+            "Item 66")) |>
+  colnames()
+  
+
+
+p <- 
+  
+  ds |> 
+  select(1:95) |> 
+  select(-c("Item 1", 
+            "Item 2", 
+            "Item 3", 
+            "Item 4",
+            "Item 5",
+            "Item 6",
+            "Item 7",
+            "Item 8",
+            "Item 9",
+            "Item 11",
+            "Item 12",
+            "Item 13",
+            "Item 14",
+            "Item 15",
+            "Item 17",
+            "Item 18",
+            "Item 24",
+            "Item 25",
+            "Item 28",
+            "Item 30",
+            "Item 31",
+            "Item 66")) |>  
+  mutate(
+    across(
+      everything(),
+      ~ as.character(.)
+    )
+  ) |>
+  pivot_longer(
+    everything(), 
+    names_to = "variable", 
+    values_to = "value"
+    ) |>  
+  mutate(missing = if_else(
+    is.na(value), 
+    "Missing", 
+    "Present")) |> 
+  count(variable, missing) |> 
+  group_by(variable) |>
+  mutate(prop = n / sum(n),
+         variable = factor(variable, levels = var_names)) |> 
+  filter(missing == "Missing") |>  
+  ggplot(aes(x = variable, 
+             y = prop)) +
+  geom_col(position = "dodge") +
+  scale_y_continuous(labels = scales::percent,
+                     limits = c(0, 0.25)) +
+  scale_fill_grey(start = 0.8, end = 0.2, name = "Data") +
+  theme_minimal() +
+  labs(x = "Variable", 
+       y = "Percent") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 9))
+
+names(ds) <- var_names_orig
+
+ggsave(plot = p, 
+       filename = "missing_data.pdf",
+       device = "pdf",
+       path = "out/figures/",
+       scale = 1.9,
+       width = 150,
+       height = 110,
+       units = "mm",
+       dpi = 320
+       )
+
+# For supplementary material
+ragg::agg_png("out/figures/missing_data.png",
+              width = 7,
+              height = 5,
+              units = "in",
+              res = 600,
+              scaling = 0.6)
+
+print(p)
+
+dev.off()
+
+rm(p)
+```
+
+These analyses are new
+
+```{r miss new ds}
+ds_m <- 
+  
+  ds |> 
+  select(loc_2,
+         starts_with("scdm_"), 
+         starts_with("work_"),
+         -ends_with(c("_a", "_b", "_num", "_rec", "_dic", "_aux")),
+         starts_with("mh_"),
+         starts_with(c("wb_who_", "wb_cl", "wb_wami_")),
+         -ends_with(c("_sc", "_co"))
+         ) |> 
+  filter(scdm_2 != "Other") |> 
+  mutate(
+    across(
+      all_of(c(protocols, "scdm_2")),
+      ~ fct_drop(.x)
+      )
+    )
+```
+
+```{r missing plots}
+missing_summary <- miss_var_summary(ds_m)
+
+missing_summary |> print(n = 80)
+
+gg_miss_upset(ds_m)
+```
+
+```{r missing data tbls}
+table_data <- 
+  
+  ds  |> 
+  mutate(
+    item_9_phq = ifelse(!is.na(mh_phq_9), "Responded", "No response")
+  ) |> 
+  select(loc_2,
+         ends_with("_comp"), item_9_phq, 
+         starts_with("scdm_"), 
+         starts_with("work_"),
+         -ends_with(c("_a", "_b", "_num", "_rec", "_dic", "_aux")),
+         -starts_with(c("mh_", "mh_", "wb_who")),
+         starts_with(c("wb_cl", "wb_wami_")),
+         -ends_with(c("_sc", "_co"))
+         ) 
+  
+# ---- PHQ-9 ----
+missingness_table_phq <- 
+  
+  table_data  |> 
+  tbl_summary(
+    by = phq_comp,
+    missing = "no"
+  ) |> 
+  add_p(test = list(all_categorical() ~ "chisq.test"))  |>   
+  add_overall() 
+
+missingness_table_phq |> 
+  as_flex_table() |> 
+  save_as_docx(path = "out/tables/miss_phq.docx")
+
+# ---- GAD-7 ----
+
+missingness_table_gad <- 
+  
+  table_data  |> 
+  tbl_summary(
+    by = gad_comp,
+    missing = "no"
+  ) |> 
+  add_p(test = list(all_categorical() ~ "chisq.test"))  |>   
+  add_overall() 
+
+missingness_table_gad
+
+# ---- CAGE ----
+
+missingness_table_cage <- 
+  
+  table_data  |> 
+  tbl_summary(
+    by = cage_comp,
+    missing = "no"
+  ) |> 
+  add_p(test = list(all_categorical() ~ "chisq.test"))  |>   
+  add_overall() 
+
+missingness_table_cage |> as_flex_table()
+
+# ---- Suicidal thoughts----
+
+missingness_table_suic <- 
+  
+  table_data  |> 
+  tbl_summary(
+    by = item_9_phq,
+    missing = "no"
+  ) |> 
+  add_p(test = list(all_categorical() ~ "chisq.test"))  |>   
+  add_overall() 
+
+# Print
+missingness_table_suic
+```
+
+# Multivariate Imputation by Chained Equations (MICE)
+
+Everything set to eval=FALSE. This chunk loads rds files produced after imputation.
+
+```{r load mids mice}
+imp_ds <- readRDS("data/mice_imputed_data.rds") # MI ds
+
+imputed_data_final <- readRDS("data/mice_imputed_data_scored.rds") # MI with scores
+
+ds_imp1 <- complete(imputed_data_final, action = 1) # first MI ds
+
+common_cols <- intersect(names(ds), names(ds_imp1))
+
+for (col in common_cols) {
+  # If the original column has a label, copy it to the new column
+  if (!is.null(attr(ds[[col]], "label"))) {
+    attr(ds_imp1[[col]], "label") <- attr(ds[[col]], "label")
+  }
+}
+
+long_all <- complete(imputed_data_final, # required for pooling
+                     action = "long", 
+                     include = FALSE)
+
+imputed_datasets <- complete(imputed_data_final,# required for assoc models
+                             action = "all")
+
+```
+
+## Baseline setup
+
+```{r baseline setup mice, eval = FALSE}
+
+init_run <- mice(ds_m, 
+                 maxit = 0)
+
+# Extract default methods vector
+meth <- init_run$method
+
+# Reassign methods dynamically
+for(i in names(meth)) {
+  
+  if(is.factor(ds_m[[i]]) || is.ordered(ds_m[[i]])) {
+    meth[i] <- "cart" # Ignores collinearity traps
+  } else if (is.numeric(ds_m[[i]]) || is.integer(ds_m[[i]])) {
+    
+    meth[i] <- "pmm"
+  }
+}
+
+# Covariates need to be original, not recoded
+covs_clean <- str_remove(covs_1, "_rec$|_dic$")
+
+vars_to_impute <- 
+  c(covs_clean, 
+    covs_2, 
+    all_exposures_bis,
+    "mh_phq_1", "mh_phq_2", "mh_phq_3", "mh_phq_4", "mh_phq_5", "mh_phq_6",
+    "mh_phq_7", "mh_phq_8", "mh_phq_9", 
+    "mh_gad_1", "mh_gad_2", "mh_gad_3", "mh_gad_4", "mh_gad_5", "mh_gad_6",
+    "mh_gad_7",
+    "mh_cage_1", "mh_cage_2", "mh_cage_3", "mh_cage_4")
+
+# Set method to "" for what is not in the list.
+meth[!names(meth) %in% vars_to_impute] <- ""
+
+# Smart predictor matrix
+# mincor tells mice to use only predictors with at least 0.1 correlation
+pred_smart <- quickpred(ds_m, 
+                        mincor = 0.15,
+                        include = "loc_2")
+
+# Identify vars not imputed
+vars_not_imputed <- names(meth)[meth == ""]
+
+# 3Force their columns in the predictor matrix to 0
+# This prevents mice from ever using them to predict anything else
+pred_smart[, vars_not_imputed] <- 0
+
+# Use more than one core
+plan(multisession, workers = 4)
+
+# Test
+message("Running test drive...")
+test_imputation <- mice(
+  ds_m,
+  method = meth,
+  predictorMatrix = pred_smart, # smart matrix 
+  m = 1,       
+  maxit = 1,   
+  seed = 123
+)
+```
+
+## Run MICE
+
+```{r run mice, eval = FALSE}
+# Run imputation using custom vector
+imputed_data <- futuremice(
+  ds_m,
+  method = meth,
+  predictorMatrix = pred_smart,
+  m = 20, # Standard is 20 imputations
+  maxit = 5,
+  parallelseed = 123
+)
+
+# Save so we don't re run
+saveRDS(imputed_data, 
+        file = "data/mice_imputed_data.rds")
+```
+
+## Imputed data diagnostics
+
+```{r imp diag, eval = FALSE}
+
+
+# Unpack all 20 imputations into one long dataset
+# include = FALSE so we don't accidentally count the raw dataset's NAs
+long_check <- complete(imp_ds, 
+                       action = "long", 
+                       include = FALSE)
+
+# Count the exact number of NAs for every single column across all 20 datasets
+missing_report <-
+  long_check |>
+  summarise(across(everything(), ~ sum(is.na(.)))) |>
+  pivot_longer(
+    cols = everything(), 
+    names_to = "Variable", 
+    values_to = "Total_NAs") |>
+  # Only keep variables that still have missing data
+  filter(Total_NAs > 0) |>
+  arrange(desc(Total_NAs))
+
+# Print the full report
+print(missing_report, n = Inf)
+
+# Plot the convergence for a selection of important variables
+
+mice_plot_1_convergence <- plot(imp_ds, c("mh_phq_9", "scdm_1", "work_31", "work_8"))
+
+# "Convergence of the MICE algorithm was confirmed via visual inspection of trace plots for the means and standard deviations of the imputed variables. The imputation chains intermingled freely and exhibited no discernible trends or pathological behavior across the 5 iterations, confirming successful convergence."
+
+# density plot. Should be similar
+
+# Visual check that imputed values are plausible
+
+# Red = imputed, Blue = observed
+densityplot(imp_ds, ~ mh_phq_1 + mh_phq_9 + work_8 + work_31)
+
+stripplot(imp_ds, work_11 + work_30 + work_33 ~ .imp, pch = 20, cex = 1.2) # spread should be similar
+```
+
+## Transform variables new scores
+
+```{r compute outcome scores, eval = FALSE}
+
+# Define country-specific cut-offs
+# Create objects with cut-off scores per country
+
+phq_co_st <- c("Belgium",
+               "Bulgaria",
+               "Croatia",
+               "Cyprus",
+               "Czechia",
+               "Denmark",
+               "Estonia",
+               "Finland",
+               "France",
+               "Greece",
+               "Hungary",
+               "Ireland",
+               "Italy",
+               "Luxembourg",
+               "Malta",
+               "Netherlands",
+               "Norway",
+               "Poland",
+               "Romania",
+               "Slovakia",
+               "Armenia",
+               "Azerbaijan",
+               "Georgia",
+               "Moldova",
+               "Ukraine")
+
+phq_co_8 <- "Latvia"
+
+phq_co_9 <- c("Portugal",
+              "Slovenia")
+
+phq_co_11 <- c("Austria",
+               "Germany",
+               "Lithuania")
+
+phq_co_12 <- c("Iceland",
+               "Spain",
+               "Sweden")
+
+gad_co_st <- c("Austria",
+               "Belgium",
+               "Bulgaria",
+               "Croatia",
+               "Cyprus",
+               "Czechia",
+               "Denmark",
+               "Estonia",
+               "Germany",
+               "Greece",
+               "Hungary",
+               "Iceland",
+               "Ireland",
+               "Italy",
+               "Luxembourg",
+               "Poland",
+               "Romania",
+               "Slovakia",
+               "Slovenia",
+               "Spain",
+               "Armenia",
+               "Azerbaijan",
+               "Georgia",
+               "Moldova",
+               "Ukraine")
+
+gad_co_5 <- "Latvia"
+
+gad_co_7 <- c("Finland",
+              "France")
+
+gad_co_8 <- c("Malta",
+              "Norway",
+              "Portugal",
+              "Sweden")
+
+gad_co_9 <- "Lithuania"
+
+gad_co_12 <- "Netherlands"
+
+
+# Extract all 20 datasets into one "long" dataframe.
+# include = TRUE pulls out original raw dataset as well (Dataset 0). 
+# We must have this to package it back up into a MICE object later!
+
+long_data <- complete(imp_ds, 
+                      action = "long",
+                      include = TRUE)
+
+# Calculate the total scores across all rows
+long_data_scored <- 
+  
+  long_data  |>
+  mutate(
+    phq_sc = rowSums(pick(mh_phq_1:mh_phq_9)),
+    gad_sc = rowSums(pick(mh_gad_1:mh_gad_7)),
+    cage_sc = rowSums(pick(mh_cage_1:mh_cage_4)),
+    wb_who_sc = rowSums(pick(wb_who_1:wb_who_5)) * 4
+  ) |> 
+  ungroup() |> 
+  # Now the cut-offs
+  mutate(
+    # Assign the correct threshold based on country
+    phq_threshold = case_when(
+      loc_2 %in% phq_co_st ~ 10,
+      loc_2 %in% phq_co_8  ~ 8, 
+      loc_2 %in% phq_co_9  ~ 9,
+      loc_2 %in% phq_co_11 ~ 11,
+      loc_2 %in% phq_co_12 ~ 12
+    ),
+    
+    gad_threshold = case_when(
+      loc_2 %in% gad_co_st ~ 10,
+      loc_2 == gad_co_5    ~ 5,
+      loc_2 %in% gad_co_7  ~ 7,
+      loc_2 %in% gad_co_8  ~ 8,
+      loc_2 == gad_co_9    ~ 9,
+      loc_2 == gad_co_12   ~ 12
+    ),
+    
+    # Create the clean binary Poisson outcomes (1 = case, 0 = healthy)
+    phq_co_poi = as.numeric(phq_sc >= phq_threshold),
+    gad_co_poi = as.numeric(gad_sc >= gad_threshold),
+    
+    # CAGE
+    cage_co_poi = as.numeric(cage_sc > 2),
+    
+    # Item 9 PHQ
+    suic_idea_poi = as.numeric(mh_phq_9 > 0),
+    
+    # WHO-5
+    wb_who_co = as.numeric(wb_who_sc >= 50)
+  )
+```
+
+```{r compute exp and covs, eval = FALSE}
+# Re-create exposures recoding
+
+long_data_transformed <- 
+  
+  long_data_scored |> 
+  
+  mutate(scdm_1_rec = fct_collapse(scdm_1,
+                                   "<30" = c("Under 20", "20-25", "26-30"),
+                                   "30-39" = c("31-35", "36-40"),
+                                   "40-49" = c("41-45", "46-50"),
+                                   "50-59" = c("51-55", "56-60"),
+                                   "60+" = c("61-65", "66-70", "Over 70")
+                                   )
+         ) |> 
+  
+  mutate(scdm_5_dic = case_when(
+    str_detect(scdm_5, "with children") ~ "Has children",
+    str_detect(scdm_5, "without children") ~ "No children",
+    TRUE ~ NA
+    ),
+    scdm_5_dic = factor(scdm_5_dic,
+                        levels = c("Has children", "No children"),
+                        ordered = FALSE)
+  ) |>
+  
+  # recode length of service
+  
+  mutate(work_3_rec = fct_collapse(
+    work_3,
+    "5 years or less" = c("Less than 1 year", "1-3 years", "4-5 years"),
+    "More than 10 years" = c("11-20 years", "21-30 years", "31-40 years",
+                             "More than 40 years")
+    )
+  ) |> 
+  
+  # job positions
+  
+  mutate(
+    work_4_dic = if_else(work_4 == "One",
+                         "One",
+                         "More than one"),
+    work_4_dic = factor(work_4_dic,
+                        levels = c("One", "More than one"))
+  ) |> 
+  
+  # work setting
+  
+   mutate(work_5_rec = fct_collapse( 
+    work_5,
+    "Inpatient" = c("Emergency department",
+                    "In-hospital care"),
+    "Outpatient" = c("Outpatient primary care",
+                     "Outpatient secondary care"),
+    "Other" = c("Extra-hospital emergencies",
+                "Other")
+  )
+  ) |> 
+  
+  # recode working hours
+  
+    
+  mutate(
+    work_8_dic = case_when(
+      work_8 %in% c("< 11 h", "11-20 h", "21-30 h", "31-40 h", "41-50 h") ~ "No", # <= 50h
+      work_8 %in% c("51-60 h", "61-70 h", "> 70 h") ~ "Yes"), # > 50h
+    work_8_dic = factor(work_8_dic, levels = c("No", "Yes"))
+  ) |> 
+  
+  # recode night work
+
+  mutate(
+    work_11_dic = case_when(
+      work_11 %in% c("1-2 times/month", "Less than monthly", "Never/Rarely") ~ "No", # 1 or 2x a month or less
+      work_11 %in% c("Daily", "Almost daily", "2-3 days/week", "Once a week", "Almost weekly") ~ "Yes"), # Almost every week and more
+    work_11_dic = factor(work_11_dic, levels = c("No", "Yes")),
+    work_11 = fct_rev(work_11)
+  ) |> 
+  
+  # name var for shifts
+  
+  mutate(work_12_dic = factor(work_12, levels = c("No", "Yes"))
+  ) |> 
+  
+  # create dichotomic for contract type
+  
+  mutate(work_16_dic = fct_recode(work_16,
+                                  "Yes" = "Temporary contract",
+                                  "No" = "Fixed contract"),
+         work_16_dic = factor(work_16_dic,
+                              levels = c("No", "Yes"),
+                              ordered = FALSE)
+  ) |> 
+  
+  # recode managing patient anger
+  
+  mutate(
+    across(
+      all_of(c("work_23", "work_24")),
+      ~ factor(
+        fct_collapse(.x,
+                     "Yes" = c("Around 1/4 of the time",
+                               "Around half of the time",
+                               "Around 3/4 of the time",
+                               "Almost all of the time",
+                               "All of the time"),
+                     "No" = c("Never",
+                              "Almost never")),
+                     levels = c("No", "Yes"),
+                     ordered = FALSE),
+        .names = "{.col}_dic"
+        )
+      ) |> 
+  
+  # recode violence
+  
+   mutate(
+    across(
+      all_of(hazards),
+      ~ factor(
+        fct_collapse(.x,
+                     "Yes" = c("Yes, daily", 
+                             "Yes, weekly", 
+                             "Yes, monthly", 
+                             "Yes, a few times"),
+                     "No" = "No"
+        ),
+        levels = c("No", "Yes"), ordered = FALSE
+      ),
+      .names = "{.col}_dic"
+    )
+  ) |>
+  
+  # Recode protocols, drop "Do not know", ensure factor levels
+ 
+   mutate(
+    across(
+      all_of(protocols),
+      ~ fct_recode(.x, NULL = "Do not know"),
+      .names = "{.col}_dic"
+    )
+  ) |> 
+
+  # relevel protocols
+
+  mutate(
+    across(
+      all_of(protocols),
+      ~ fct_relevel(factor(.x), "No"),
+      .names = "{.col}_dic"
+    )
+  ) |> 
+  
+  # recode protective factors (except w-l balance)
+  
+  mutate(
+    across(
+      all_of(c("work_19", "work_20", "work_21", "work_22")),
+      ~ factor(
+        fct_collapse(.x,
+                     "No" = c("Sometimes", "Seldom", "Never / Hardly ever"),
+                     "Yes" = c("Always", "Often"),
+        ),
+        levels = c("No", "Yes"), ordered = FALSE
+      ),
+      .names = "{.col}_dic"
+    )
+  ) |> 
+  
+  # recode work-life balance
+  
+  mutate(
+    work_34_dic = case_when(
+      work_34 %in% c("To a very small extent", "To a small extent", "To a moderate extent") ~ "No",
+      work_34 %in% c("To a large extent", "To a very large extent") ~ "Yes"),
+    work_34_dic = factor(work_34_dic, levels = c("No", "Yes"))
+  ) |> 
+  
+  # create numeric variables
+  
+  mutate(
+    across(
+      all_of(hazards),
+      ~ case_when(
+        .x == "No"                ~ 0,
+        .x == "Yes, a few times"  ~ 1,
+        .x == "Yes, monthly"      ~ 2,
+        .x == "Yes, weekly"       ~ 3,
+        .x == "Yes, daily"        ~ 4,
+        TRUE                      ~ NA_real_
+        ),
+      .names = "{.col}_num"
+      )
+    ) |> 
+  mutate(
+    across(
+      all_of(demands) & !all_of("work_12"), # work_12 is binary
+      \(x) as.numeric(x) - 1, # 0 as reference
+    .names = "{.col}_num")) |> 
+  mutate(
+    across(
+      all_of(resources),
+      \(x) as.numeric(x) - 1, # 0 as reference
+    .names = "{.col}_num"))
+```
+
+```{r wrap it up, eval = FALSE}
+
+imputed_data_final <- as.mids(long_data_transformed)
+
+
+
+saveRDS(imputed_data_final, file = "data/mice_imputed_data_scored.rds")
+
+
+rm(gad_co_12, gad_co_5, gad_co_7, gad_co_8, gad_co_9, gad_co_st, phq_co_11, 
+   phq_co_12, phq_co_8, phq_co_9, phq_co_st)
+```
+
+# Main analyses with MICE
+
+## Sociodemographics
+
+```{r scdm imp}
+
+# ---- DS 1 ----
+
+t1 <- 
+  
+  ds_imp1 |> 
+  mutate(scdm_2 = fct_drop(scdm_2)) |>
+  filter(!is.na(scdm_2)) |> 
+  select(all_of(c(scdm, covs_1))) |> 
+  tbl_strata(
+    strata = work_2,
+    .tbl_fun = ~ tbl_summary(
+      .x, 
+      by = scdm_2,
+      missing = "no") |> 
+      add_overall()
+  ) |> 
+  as_flex_table()
+
+save_as_docx(t1, path = "out/tables/scdm_tbl_imp.docx")
+```
+
+## Exposures
+
+```{r exp imp}
+
+# ---- DS 1 ----
+
+# Table 2
+
+t_exp <- 
+  ds_imp1 |> 
+  select(all_of(c("work_2", "scdm_2", all_exposures_bis))) |> 
+  tbl_strata(
+    strata = work_2,
+    .tbl_fun = ~ tbl_summary(
+      .x, 
+      by = scdm_2,
+      missing = "no") |> 
+      add_overall()
+  ) 
+
+# Group exposures and add labels
+t_exp_groups <- 
+  
+  t_exp |> 
+  as_tibble() |> 
+  mutate(groupname_col = case_when(
+      `**Characteristic**` %in% c("Extended working hours", "Frequent night shifts",
+                  "Frequent rotating shifts", "Tight deadlines",
+                  "Managing patient and relative anger") ~ "Job demands",
+      `**Characteristic**` %in% c("Sexual harassment", "Violent threats",
+                  "Physical violence", "Bullying") ~ "Job hazards",
+      `**Characteristic**` %in% c("Influence over work", "Influence over work (breaks)",
+                  "Colleague support", "Support from superiors") ~ "Job resources",
+      `**Characteristic**` %in% c("Work council or union", "Mechanisms for employee feedback",
+                  "Workplace stress action plan", "Bullying and harassment protocols", "Violence protocols") ~ "Organisational support structures",
+      TRUE ~ NA_character_
+  )) |> 
+  tidyr::fill(groupname_col, .direction  = "down") |> 
+  flextable::as_grouped_data(groups = "groupname_col") |> 
+  flextable() |> 
+  set_header_labels(
+    values = setNames(
+      gsub("\\*\\*", "", names(as_tibble(t_exp))), 
+      names(as_tibble(t_exp))
+      )) |> 
+  set_header_labels(
+    groupname_col = "Group",
+    Characteristic = "Exposure"
+  )|> 
+  add_header_row(
+    values = c("", "",  "Doctor", "Nurse"),
+    colwidths = c(1, 1, 3, 3) 
+  ) |> 
+  align(i = 1, align = "center", part = "header") |> 
+  bold(i = 1, part = "header") |> 
+  bold(i = ~ !is.na(groupname_col), j = 1) 
+  # Removed the italicizing of the "Missing" rows, since they no longer exist!
+
+save_as_docx(t_exp_groups, path = "out/tables/exp_tbl_imp1.docx")
+
+# ---- Pooled ---- 
+
+# Format
+base_exp_data <- 
+  
+  long_all |>
+  select(work_2, scdm_2, all_of(all_exposures)) |>
+  mutate(
+    across(
+      all_of(all_exposures), 
+      ~ if_else(.x == "Yes", 1, 0)
+      )
+    )
+
+# Function to calculate data
+pooled_exp_stats <- 
+  function(data) {
+  
+    data |>
+    summarise(
+      True_N = n() / 20,
+      
+      hrs_n      = round(sum(work_8_dic == 1, na.rm = TRUE) / 20),
+      nights_n   = round(sum(work_11_dic == 1, na.rm = TRUE) / 20),
+      shifts_n   = round(sum(work_12_dic == 1, na.rm = TRUE) / 20),
+      deadlines_n= round(sum(work_23_dic == 1, na.rm = TRUE) / 20),
+      angry_n    = round(sum(work_24_dic == 1, na.rm = TRUE) / 20),
+      
+      harass_n   = round(sum(work_30_dic == 1, na.rm = TRUE) / 20),
+      threats_n  = round(sum(work_31_dic == 1, na.rm = TRUE) / 20),
+      viol_n     = round(sum(work_32_dic == 1, na.rm = TRUE) / 20),
+      bull_n     = round(sum(work_33_dic == 1, na.rm = TRUE) / 20),
+      
+      influence_n= round(sum(work_19_dic == 1, na.rm = TRUE) / 20),
+      breaks_n   = round(sum(work_20_dic == 1, na.rm = TRUE) / 20),
+      cols_n     = round(sum(work_21_dic == 1, na.rm = TRUE) / 20),
+      sup_n      = round(sum(work_22_dic == 1, na.rm = TRUE) / 20),
+      
+      council_n  = round(sum(work_25_dic == 1, na.rm = TRUE) / 20),
+      feedback_n = round(sum(work_26_dic == 1, na.rm = TRUE) / 20),
+      stressplan_n= round(sum(work_27_dic == 1, na.rm = TRUE) / 20),
+      harprot_n  = round(sum(work_28_dic == 1, na.rm = TRUE) / 20),
+      vioprot_n  = round(sum(work_29_dic == 1, na.rm = TRUE) / 20),
+      
+      hrs_pct      = mean(work_8_dic == 1, na.rm = TRUE) * 100,
+      nights_pct   = mean(work_11_dic == 1, na.rm = TRUE) * 100,
+      shifts_pct   = mean(work_12_dic == 1, na.rm = TRUE) * 100,
+      deadlines_pct= mean(work_23_dic == 1, na.rm = TRUE) * 100,
+      angry_pct    = mean(work_24_dic == 1, na.rm = TRUE) * 100,
+      
+      harass_pct   = mean(work_30_dic == 1, na.rm = TRUE) * 100,
+      threats_pct  = mean(work_31_dic == 1, na.rm = TRUE) * 100,
+      viol_pct     = mean(work_32_dic == 1, na.rm = TRUE) * 100,
+      bull_pct     = mean(work_33_dic == 1, na.rm = TRUE) * 100,
+      
+      influence_pct= mean(work_19_dic == 1, na.rm = TRUE) * 100,
+      breaks_pct   = mean(work_20_dic == 1, na.rm = TRUE) * 100,
+      cols_pct     = mean(work_21_dic == 1, na.rm = TRUE) * 100,
+      sup_pct      = mean(work_22_dic == 1, na.rm = TRUE) * 100,
+      
+      council_pct  = mean(work_25_dic == 1, na.rm = TRUE) * 100,
+      feedback_pct = mean(work_26_dic == 1, na.rm = TRUE) * 100,
+      stressplan_pct= mean(work_27_dic == 1, na.rm = TRUE) * 100,
+      harprot_pct  = mean(work_28_dic == 1, na.rm = TRUE) * 100,
+      vioprot_pct  = mean(work_29_dic == 1, na.rm = TRUE) * 100,
+      
+      .groups = "drop"
+    )
+  }
+
+# Calculate by subgroup
+pooled_gen_exp <-
+  
+  base_exp_data |> 
+  group_by(work_2, scdm_2) |> 
+  pooled_exp_stats() |> 
+  mutate(Gender = as.character(scdm_2))
+
+pooled_ovrl_exp <- 
+  
+  base_exp_data |> 
+  group_by(work_2) |> 
+  pooled_exp_stats() |> 
+  mutate(Gender = "Overall")
+
+# Format function
+fmt <- 
+  function(n, pct) {
+    
+    sprintf("%s (%.0f%%)", format(n, big.mark = ","), pct)
+    
+    }
+
+# Merge, format and clean
+pooled_table2_raw <- 
+  
+  bind_rows(pooled_ovrl_exp, pooled_gen_exp) |>
+  mutate(
+    `Extended working hours`       = fmt(hrs_n, hrs_pct),
+    `Frequent night shifts`        = fmt(nights_n, nights_pct),
+    `Regular shift work`           = fmt(shifts_n, shifts_pct),
+    `Tight deadlines`              = fmt(deadlines_n, deadlines_pct),
+    `Angry patients or relatives`  = fmt(angry_n, angry_pct),
+    
+    `Sexual harassment`            = fmt(harass_n, harass_pct),
+    `Violent threats`              = fmt(threats_n, threats_pct),
+    `Physical violence`            = fmt(viol_n, viol_pct),
+    `Bullying`                     = fmt(bull_n, bull_pct),
+    
+    `Influence over work`          = fmt(influence_n, influence_pct),
+    `Influence over work (breaks)` = fmt(breaks_n, breaks_pct),
+    `Colleague support`            = fmt(cols_n, cols_pct),
+    `Support from superiors`       = fmt(sup_n, sup_pct),
+    
+    `Work council or union`        = fmt(council_n, council_pct),
+    `Employee feedback`            = fmt(feedback_n, feedback_pct),
+    `Stress action plan`           = fmt(stressplan_n, stressplan_pct),
+    `Harassment protocol`          = fmt(harprot_n, harprot_pct),
+    `Violence protocol`            = fmt(vioprot_n, vioprot_pct)
+  ) |>
+  select(-ends_with(c("_n", "_pct")), -True_N, -scdm_2) |> 
+  rename(Profession = work_2)
+
+# Pivot the table 
+pooled_table2_final <- 
+  
+  pooled_table2_raw |>
+  pivot_longer(
+    cols = -c(Gender, Profession),
+    names_to = "Characteristic",
+    values_to = "Value"
+  ) |>
+  pivot_wider(
+    names_from = c(Profession, Gender),
+    values_from = Value
+  ) |>
+  # Enforce the correct column order
+  select(Characteristic, 
+         Doctor_Overall, Doctor_Female, Doctor_Male, 
+         Nurse_Overall, Nurse_Female, Nurse_Male) |> 
+  
+  # Inject grouping logic
+  mutate(groupname_col = case_when(
+    Characteristic %in% c("Extended working hours", "Frequent night shifts",
+                          "Regular shift work", "Tight deadlines",
+                          "Angry patients or relatives") ~ "Job demands",
+    Characteristic %in% c("Sexual harassment", "Violent threats",
+                          "Physical violence", "Bullying") ~ "Job hazards",
+    Characteristic %in% c("Influence over work", "Influence over work (breaks)",
+                          "Colleague support", "Support from superiors") ~ "Job resources",
+    Characteristic %in% c("Work council or union", "Employee feedback",
+                          "Stress action plan", "Harassment protocol", "Violence protocol") ~ "Organisational support structures",
+    TRUE ~ NA_character_
+  )) |> 
+  flextable::as_grouped_data(groups = "groupname_col") |> 
+  flextable() |> 
+  
+  # Rename the columns to be clean
+  set_header_labels(
+    groupname_col  = "Group",
+    Characteristic = "Exposure",
+    Doctor_Overall = "Overall",
+    Doctor_Female  = "Female",
+    Doctor_Male    = "Male",
+    Nurse_Overall  = "Overall",
+    Nurse_Female   = "Female",
+    Nurse_Male     = "Male"
+  ) |> 
+  
+  # Spanner (Colwidths match 1 for group and exp, 3 for Docs, 3 for Nurses)
+  add_header_row(
+    values = c("", "Doctor", "Nurse"),
+    colwidths = c(2, 3, 3) 
+  ) |> 
+  
+  # Final styling
+  align(i = 1, align = "center", part = "header") |> 
+  bold(i = 1, part = "header") |> 
+  bold(i = ~ !is.na(groupname_col), j = 1) |> 
+  autofit()
+
+# Save the beautifully pooled table
+save_as_docx(pooled_table2_final, path = "out/tables/exp_tbl_imp_pooled.docx")
+```
+
+## Outcomes
+
+```{r out imp 1, eval = FALSE}
+
+# ---- DS 1 ----
+
+t_out <- 
+  
+  ds_imp1 |> 
+  mutate(scdm_2 = fct_drop(scdm_2)) |>
+  mutate(
+    across(
+      all_of(out_poisson),
+      \(x) if_else(x == 1, "Yes", "No"),
+      .names = "{str_remove(.col, '_poi')}"
+    )
+  ) |> 
+  filter(!is.na(scdm_2)) |>
+  select(all_of(c("work_2", "scdm_2", out_dic))) |> 
+  tbl_strata(
+    strata = work_2,
+    .tbl_fun = ~ tbl_summary(
+      .x, 
+      by = scdm_2,
+      label = list(
+        phq_co ~ "Probable depression",
+        gad_co ~ "Probable anxiety",
+        suic_idea ~ "Suicidal thoughts",
+        cage_co ~ "Probable alcohol dependence"
+      ),
+      missing = "no") |> 
+      add_overall()
+  ) |> 
+  as_flex_table()
+
+save_as_docx(t_out, path = "out/tables/out_tbl_imp1.docx")
+
+# ---- Pooled ----
+
+# Format
+base_out_data <- 
+  
+  long_all |>
+  select(work_2, scdm_2, all_of(out_poisson)) 
+
+# Function to calculate data
+pooled_out_stats <- 
+  function(data) {
+  
+    data |>
+    summarise(
+      True_N = n() / 20,
+      
+      dep_n      = round(sum(phq_co_poi == 1, na.rm = TRUE) / 20),
+      anx_n   = round(sum(gad_co_poi == 1, na.rm = TRUE) / 20),
+      suic_n   = round(sum(suic_idea_poi == 1, na.rm = TRUE) / 20),
+      alc_n= round(sum(cage_co_poi == 1, na.rm = TRUE) / 20),
+      
+      dep_pct      = mean(phq_co_poi == 1, na.rm = TRUE) * 100,
+      anx_pct   = mean(gad_co_poi == 1, na.rm = TRUE) * 100,
+      suic_pct   = mean(suic_idea_poi == 1, na.rm = TRUE) * 100,
+      alc_pct= mean(cage_co_poi == 1, na.rm = TRUE) * 100,
+      
+      .groups = "drop"
+    )
+  }
+
+# Calculate by subgroup
+pooled_gen_out <-
+  
+  base_out_data |> 
+  group_by(work_2, scdm_2) |> 
+  pooled_out_stats() |> 
+  mutate(Gender = as.character(scdm_2))
+
+pooled_ovrl_out <- 
+  
+  base_out_data |> 
+  group_by(work_2) |> 
+  pooled_out_stats() |> 
+  mutate(Gender = "Overall")
+
+# Format function
+fmt <- 
+  function(n, pct) {
+    
+    sprintf("%s (%.0f%%)", format(n, big.mark = ","), pct)
+    
+    }
+
+# Merge, format and clean
+pooled_table3_raw <- 
+  
+  bind_rows(pooled_ovrl_out, pooled_gen_out) |>
+  mutate(
+    `Probable depression`         = fmt(dep_n, dep_pct),
+    `Probable anxiety`            = fmt(anx_n, anx_pct),
+    `Suicidal thoughts`           = fmt(suic_n, suic_pct),
+    `Probable alcohol dependence` = fmt(alc_n, alc_pct),
+    ) |>
+  select(-ends_with(c("_n", "_pct")), -True_N, -scdm_2) |> 
+  rename(Profession = work_2)
+
+# Pivot the table 
+pooled_table3_final <- 
+  
+  pooled_table3_raw |>
+  pivot_longer(
+    cols = -c(Gender, Profession),
+    names_to = "Characteristic",
+    values_to = "Value"
+  ) |>
+  pivot_wider(
+    names_from = c(Profession, Gender),
+    values_from = Value
+  ) |>
+  # Enforce the correct column order
+  select(Characteristic, 
+         Doctor_Overall, Doctor_Female, Doctor_Male, 
+         Nurse_Overall, Nurse_Female, Nurse_Male) |> 
+  flextable() |> 
+  
+  # Rename the columns to be clean
+  set_header_labels(
+    Characteristic = "Outcome",
+    Doctor_Overall = "Overall",
+    Doctor_Female  = "Female",
+    Doctor_Male    = "Male",
+    Nurse_Overall  = "Overall",
+    Nurse_Female   = "Female",
+    Nurse_Male     = "Male"
+  ) |> 
+  
+  # Spanner (Colwidths match 1 for outcome, 3 for Docs, 3 for Nurses)
+  add_header_row(
+    values = c("", "Doctor", "Nurse"),
+    colwidths = c(1, 3, 3) 
+  ) |> 
+  
+  # Final styling
+  align(i = 1, align = "center", part = "header") |> 
+  bold(i = 1, part = "header") |> 
+  autofit()
+
+# Save the beautifully pooled table
+save_as_docx(pooled_table3_final, path = "out/tables/out_tbl_imp_pooled.docx")
+```
+
+## Associations
+
+```{r exp-out prep}
+
+profs <- levels(ds$work_2)
+
+covariate_map <- list("base_covs" = covs_1)
+
+tasks_all <- expand_grid(
+  Outcome = out_poisson,
+  Family = "poisson", 
+  Exposure = all_exposures,
+  Covar_Key = "base_covs",
+  profession = "All"
+  )
+
+#---- Setup machine ----
+
+# # Increase the future package's memory limit to 3 Gigabytes
+# options(future.globals.maxSize = 3 * 1024^3)
+# # SET UP SAFE PARALLEL PROCESSING (4 Cores to protect 16GB RAM)
+# plan(multisession, workers = 2)
+
+```
+
+```{r imp model run dep agg, eval = FALSE}
+
+# filter DEP
+
+tasks_run <- tasks_all |> filter(Outcome == "phq_co_poi")
+
+exp_out_all_imp_dep <- future_pmap(list(
+    tasks_run$Outcome,
+    tasks_run$Family,
+    tasks_run$Exposure,
+    tasks_run$Covar_Key,
+    tasks_run$profession
+    ), function(outcome, family, exposure, cov_key, prof) {
+  
+    # Run models across all 20 datasets sequentially within each core
+    imp_results <-
+      imap(imputed_datasets, 
+           function(ds_i, i) {
+    
+    # Define a unique folder for each imputation 
+    current_out_dir <- paste0("out/models/imputed/imp_", i)
+      
+      res_crude <- 
+        run_crude_glm(
+          data = ds_i,
+          outcome_var = outcome, 
+          exposure_var = exposure, 
+          profession = prof, 
+          cluster_var = covs_2, 
+          family_type = family,
+          output_dir = current_out_dir
+          )
+      
+      res_adj <- 
+        run_adj_glm(
+          data = ds_i, 
+          outcome_var = outcome, 
+          exposure_var = exposure,
+          profession = prof, 
+          cluster_var = covs_2, 
+          family_type = family,
+          confounder_list = covariate_map[[cov_key]], 
+          model_label = "Adjusted",
+          output_dir = current_out_dir
+          )
+      
+      return(list(crude = res_crude, adj = res_adj))
+      })
+    
+    # Extract and stack the 20 sets of results
+    crude_ml_stack <- map_dfr(imp_results, ~ .x$crude$multilevel)
+    crude_rb_stack <- map_dfr(imp_results, ~ .x$crude$robust)
+    adj_ml_stack   <- map_dfr(imp_results, ~ .x$adj$multilevel)
+    adj_rb_stack   <- map_dfr(imp_results, ~ .x$adj$robust)
+    
+    # Pool them using Rubin's Rules
+    row_multilevel <- 
+      bind_rows(
+        pool_rubins_rules(crude_ml_stack),
+        pool_rubins_rules(adj_ml_stack)
+        )
+    
+    row_robust <- 
+      bind_rows(
+        pool_rubins_rules(crude_rb_stack),
+        pool_rubins_rules(adj_rb_stack)
+        )
+    
+    return(list(
+      multilevel = row_multilevel,
+      robust     = row_robust
+    ))
+    
+  }, .options = furrr_options(seed = TRUE))
+
+# Unzip, Combine, and Save
+
+imp_multilevel_df_dep <- map_dfr(exp_out_all_imp_dep, "multilevel")
+imp_robust_df_dep <- map_dfr(exp_out_all_imp_dep, "robust")
+
+saveRDS(imp_multilevel_df_dep, "out/dataframes/imp_multilevel_df_dep.rds")
+saveRDS(imp_robust_df_dep, "out/dataframes/imp_robust_df_dep.rds")
+```
+
+```{r imp model run anx agg, eval = FALSE}
+# filter ANX
+
+tasks_run <- tasks_all |> filter(Outcome == "gad_co_poi")
+
+exp_out_all_imp_anx <- future_pmap(list(
+    tasks_run$Outcome,
+    tasks_run$Family,
+    tasks_run$Exposure,
+    tasks_run$Covar_Key,
+    tasks_run$profession
+    ), function(outcome, family, exposure, cov_key, prof) {
+  
+    # Run models across all 20 datasets sequentially within each core
+    imp_results <-
+      imap(imputed_datasets, 
+           function(ds_i, i) {
+    
+    # Define a unique folder for each imputation 
+    current_out_dir <- paste0("out/models/imputed/imp_", i)
+      
+      res_crude <- 
+        run_crude_glm(
+          data = ds_i,
+          outcome_var = outcome, 
+          exposure_var = exposure, 
+          profession = prof, 
+          cluster_var = covs_2, 
+          family_type = family,
+          output_dir = current_out_dir
+          )
+      
+      res_adj <- 
+        run_adj_glm(
+          data = ds_i, 
+          outcome_var = outcome, 
+          exposure_var = exposure,
+          profession = prof, 
+          cluster_var = covs_2, 
+          family_type = family,
+          confounder_list = covariate_map[[cov_key]], 
+          model_label = "Adjusted",
+          output_dir = current_out_dir
+          )
+      
+      return(list(crude = res_crude, adj = res_adj))
+      })
+    
+    # Extract and stack the 20 sets of results
+    crude_ml_stack <- map_dfr(imp_results, ~ .x$crude$multilevel)
+    crude_rb_stack <- map_dfr(imp_results, ~ .x$crude$robust)
+    adj_ml_stack   <- map_dfr(imp_results, ~ .x$adj$multilevel)
+    adj_rb_stack   <- map_dfr(imp_results, ~ .x$adj$robust)
+    
+    # Pool them using Rubin's Rules
+    row_multilevel <- 
+      bind_rows(
+        pool_rubins_rules(crude_ml_stack),
+        pool_rubins_rules(adj_ml_stack)
+        )
+    
+    row_robust <- 
+      bind_rows(
+        pool_rubins_rules(crude_rb_stack),
+        pool_rubins_rules(adj_rb_stack)
+        )
+    
+    return(list(
+      multilevel = row_multilevel,
+      robust     = row_robust
+    ))
+    
+  }, .options = furrr_options(seed = TRUE))
+
+imp_multilevel_df_anx <- map_dfr(exp_out_all_imp_anx, "multilevel")
+imp_robust_df_anx <- map_dfr(exp_out_all_imp_anx, "robust")
+
+saveRDS(imp_multilevel_df_anx, "out/dataframes/imp_multilevel_df_anx.rds")
+saveRDS(imp_robust_df_anx, "out/dataframes/imp_robust_df_anx.rds")
+```
+
+```{r imp model run suic agg, eval = FALSE}
+# filter SUIC
+
+tasks_run <- tasks_all |> filter(Outcome == "suic_idea_poi")
+
+exp_out_all_imp_suic <- future_pmap(list(
+    tasks_run$Outcome,
+    tasks_run$Family,
+    tasks_run$Exposure,
+    tasks_run$Covar_Key,
+    tasks_run$profession
+    ), function(outcome, family, exposure, cov_key, prof) {
+  
+    # Run models across all 20 datasets sequentially within each core
+    imp_results <-
+      imap(imputed_datasets, 
+           function(ds_i, i) {
+    
+    # Define a unique folder for each imputation 
+    current_out_dir <- paste0("out/models/imputed/imp_", i)
+      
+      res_crude <- 
+        run_crude_glm(
+          data = ds_i,
+          outcome_var = outcome, 
+          exposure_var = exposure, 
+          profession = prof, 
+          cluster_var = covs_2, 
+          family_type = family,
+          output_dir = current_out_dir
+          )
+      
+      res_adj <- 
+        run_adj_glm(
+          data = ds_i, 
+          outcome_var = outcome, 
+          exposure_var = exposure,
+          profession = prof, 
+          cluster_var = covs_2, 
+          family_type = family,
+          confounder_list = covariate_map[[cov_key]], 
+          model_label = "Adjusted",
+          output_dir = current_out_dir
+          )
+      
+      return(list(crude = res_crude, adj = res_adj))
+      })
+    
+    # Extract and stack the 20 sets of results
+    crude_ml_stack <- map_dfr(imp_results, ~ .x$crude$multilevel)
+    crude_rb_stack <- map_dfr(imp_results, ~ .x$crude$robust)
+    adj_ml_stack   <- map_dfr(imp_results, ~ .x$adj$multilevel)
+    adj_rb_stack   <- map_dfr(imp_results, ~ .x$adj$robust)
+    
+    # Pool them using Rubin's Rules
+    row_multilevel <- 
+      bind_rows(
+        pool_rubins_rules(crude_ml_stack),
+        pool_rubins_rules(adj_ml_stack)
+        )
+    
+    row_robust <- 
+      bind_rows(
+        pool_rubins_rules(crude_rb_stack),
+        pool_rubins_rules(adj_rb_stack)
+        )
+    
+    return(list(
+      multilevel = row_multilevel,
+      robust     = row_robust
+    ))
+    
+  }, .options = furrr_options(seed = TRUE))
+
+imp_multilevel_df_suic <- map_dfr(exp_out_all_imp_suic, "multilevel")
+imp_robust_df_suic <- map_dfr(exp_out_all_imp_suic, "robust")
+
+saveRDS(imp_multilevel_df_suic, "out/dataframes/imp_multilevel_df_suic.rds")
+saveRDS(imp_robust_df_suic, "out/dataframes/imp_robust_df_suic.rds")
+```
+
+```{r imp model run alc agg, eval = FALSE}
+# filter ALC
+
+tasks_run <- tasks_all |> filter(Outcome == "cage_co_poi")
+
+exp_out_all_imp_alc <- future_pmap(list(
+    tasks_run$Outcome,
+    tasks_run$Family,
+    tasks_run$Exposure,
+    tasks_run$Covar_Key,
+    tasks_run$profession
+    ), function(outcome, family, exposure, cov_key, prof) {
+  
+    # Run models across all 20 datasets sequentially within each core
+    imp_results <-
+      imap(imputed_datasets, 
+           function(ds_i, i) {
+    
+    # Define a unique folder for each imputation 
+    current_out_dir <- paste0("out/models/imputed/imp_", i)
+      
+      res_crude <- 
+        run_crude_glm(
+          data = ds_i,
+          outcome_var = outcome, 
+          exposure_var = exposure, 
+          profession = prof, 
+          cluster_var = covs_2, 
+          family_type = family,
+          output_dir = current_out_dir
+          )
+      
+      res_adj <- 
+        run_adj_glm(
+          data = ds_i, 
+          outcome_var = outcome, 
+          exposure_var = exposure,
+          profession = prof, 
+          cluster_var = covs_2, 
+          family_type = family,
+          confounder_list = covariate_map[[cov_key]], 
+          model_label = "Adjusted",
+          output_dir = current_out_dir
+          )
+      
+      return(list(crude = res_crude, adj = res_adj))
+      })
+    
+    # Extract and stack the 20 sets of results
+    crude_ml_stack <- map_dfr(imp_results, ~ .x$crude$multilevel)
+    crude_rb_stack <- map_dfr(imp_results, ~ .x$crude$robust)
+    adj_ml_stack   <- map_dfr(imp_results, ~ .x$adj$multilevel)
+    adj_rb_stack   <- map_dfr(imp_results, ~ .x$adj$robust)
+    
+    # Pool them using Rubin's Rules
+    row_multilevel <- 
+      bind_rows(
+        pool_rubins_rules(crude_ml_stack),
+        pool_rubins_rules(adj_ml_stack)
+        )
+    
+    row_robust <- 
+      bind_rows(
+        pool_rubins_rules(crude_rb_stack),
+        pool_rubins_rules(adj_rb_stack)
+        )
+    
+    return(list(
+      multilevel = row_multilevel,
+      robust     = row_robust
+    ))
+    
+  }, .options = furrr_options(seed = TRUE))
+
+imp_multilevel_df_alc <- map_dfr(exp_out_all_imp_alc, "multilevel")
+imp_robust_df_alc <- map_dfr(exp_out_all_imp_alc, "robust")
+
+saveRDS(imp_multilevel_df_alc, "out/dataframes/imp_multilevel_df_alc.rds")
+saveRDS(imp_robust_df_alc, "out/dataframes/imp_robust_df_alc.rds")
+```
+
+```{r combine}
+
+# Load all RDS files from dataframes folder
+dataframe_files <- list.files(
+  path = "out/models/summary",
+  pattern = "\\.rds$",
+  full.names = TRUE
+)
+
+for (file in dataframe_files) {
+  # Extract name from filename (remove .rds)
+  name <- tools::file_path_sans_ext(basename(file))
+  
+  # Load and assign to environment
+  assign(name, readRDS(file))
+  
+  cat("Loaded:", name, "\n")
+}
+
+# Combine all dataframes starting with "imp_"
+imp_mods_all <- 
+  
+  bind_rows(mget(ls(pattern = "^imp_multilevel|^imp_robust"))) |> 
+  mutate(imp = "mice",
+         model = case_when(
+           model == "Poisson + RSVE"     ~ "Robust SE",
+           model == "Multilevel Poisson" ~ "Multilevel",
+           TRUE                          ~ model)
+         ) |> 
+  select(!Profession)
+
+saveRDS(imp_mods_all, "out/models/summary/imp_mods_all.rds")
+
+# Combine all dataframes of complete-cases
+
+cc_mods_all <- 
+  
+  bind_rows(glm_multilevel_df_extended, glm_robust_df_extended) |> 
+  mutate(imp = "cc") |> 
+  filter(Family_Type == "poisson") |> 
+  select(!(c("Family_Type", "Measure", "Profession"))) |> 
+  # reorder to match imp_mods_all
+  select(all_of(colnames(imp_mods_all)))
+
+# Match order
+
+cc_and_mice <- bind_rows(cc_mods_all, imp_mods_all)
+```
+
+### Comparisons CCA v MICE
+
+```{r compare cc mice}
+
+#---- Bs and SEs ----
+
+ratios <-
+  
+  cc_and_mice |> 
+  select(model, Outcome, Exposure, Adjustment, beta, SE,PR, imp) |> 
+  pivot_wider(id_cols = c(model, Outcome, Exposure, Adjustment),
+              names_from = imp, 
+              values_from = c(beta, SE, PR)) |> 
+  mutate(beta_cc = abs(beta_cc),
+         beta_mice = abs(beta_mice),
+         beta_ratio = beta_cc / beta_mice,
+         se_ratio = SE_cc / SE_mice,
+         pr_ratio = PR_cc / PR_mice) |> 
+  mutate(
+    Exposure = case_when(
+      Exposure == "work_21_dic" ~ "Colleague support",
+      Exposure == "work_22_dic" ~ "Support from superiors",
+      Exposure == "work_31_dic" ~ "Violent threats",
+      Exposure == "work_32_dic" ~ "Physical violence",
+      Exposure == "work_30_dic" ~ "Sexual harassment",
+      Exposure == "work_33_dic" ~ "Bullying",
+      Exposure == "wb_wami_1_dic" ~ "Meaning in work",
+      Exposure == "wb_wami_2_dic" ~ "Purpose in work",
+      TRUE ~ Exposure),
+    Outcome = case_when(
+      Outcome == "phq_co_poi" ~ "Depression",
+      Outcome == "gad_co_poi" ~ "Anxiety",
+      Outcome == "cage_co_poi" ~ "Alcohol dependence",
+      Outcome == "suic_idea_poi" ~ "Suicidal thoughts",
+      TRUE ~ Outcome
+    )
+  )
+  
+plot_se_ml <- 
+  
+  ratios |> 
+  filter(model == "Multilevel") |> 
+  mutate(Outcome = factor(Outcome, levels = outcome_order)) |> 
+  arrange(Outcome) |> 
+  ggplot(aes(x = SE_cc,
+             y = SE_mice, 
+             colour = Adjustment,
+             shape = Adjustment)) +
+  geom_abline(
+    intercept = 0,
+    slope = 1,
+    linetype = "dashed",
+    colour = "grey50"
+  ) +
+  geom_point(
+    size = 2.5,
+    alpha = 0.8
+  ) +
+  scale_colour_grey() +
+  labs(
+    x = "SEs from complete-case multilevel models",
+    y = "SEs from MICE multilevel models",
+    title = "SE comparison (Multilevel models)"
+    ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    legend.position = "bottom"
+  ) +
+  facet_wrap(~Outcome) 
+
+plot_se_rob <- 
+  
+  ratios |> 
+  filter(model == "Robust SE") |> 
+  mutate(Outcome = factor(Outcome, levels = outcome_order)) |> 
+  arrange(Outcome) |> 
+  ggplot(aes(x = SE_cc,
+             y = SE_mice, 
+             colour = Adjustment,
+             shape = Adjustment)) +
+  geom_abline(
+    intercept = 0,
+    slope = 1,
+    linetype = "dashed",
+    colour = "grey50"
+  ) +
+  xlim(0, 0.15) +
+  ylim(0, 0.15) +
+  geom_point(
+    size = 2.5,
+    alpha = 0.8
+  ) +
+  scale_colour_grey() +
+  labs(
+    x = "Robust SEs from complete-case fixed-effects models",
+    y = "Robust SEs from MICE fixed-effects models",
+    title = "Robust SE comparison (fixed-effects models)"
+    ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    legend.position = "bottom"
+  ) +
+  facet_wrap(~Outcome) 
+
+plot_b_ml <- 
+  
+  ratios |> 
+  filter(model == "Multilevel") |> 
+  mutate(Outcome = factor(Outcome, levels = outcome_order)) |> 
+  arrange(Outcome) |> 
+  ggplot(aes(x = beta_cc,
+             y = beta_mice, 
+             colour = Adjustment,
+             shape = Adjustment)) +
+  geom_abline(
+    intercept = 0,
+    slope = 1,
+    linetype = "dashed",
+    colour = "grey50"
+  ) +
+  geom_point(
+    size = 2.5,
+    alpha = 0.8
+  ) +
+  scale_colour_grey() +
+  labs(
+    x = "Bs from complete-case multilevel models",
+    y = "Bs from MICE multilevel models",
+    title = "B comparison (Multilevel models)"
+    ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    legend.position = "bottom"
+  ) +
+  facet_wrap(~Outcome) 
+
+plot_b_rob <- 
+  
+  ratios |> 
+  filter(model == "Robust SE") |> 
+  mutate(Outcome = factor(Outcome, levels = outcome_order)) |> 
+  arrange(Outcome) |> 
+  ggplot(aes(x = beta_cc,
+             y = beta_mice, 
+             colour = Adjustment,
+             shape = Adjustment)) +
+  geom_abline(
+    intercept = 0,
+    slope = 1,
+    linetype = "dashed",
+    colour = "grey50"
+  ) +
+  geom_point(
+    size = 2.5,
+    alpha = 0.8
+  ) +
+  scale_colour_grey() +
+  labs(
+    x = "Bs from complete-case fixed-effects models",
+    y = "Bs from MICE fixed-effects models",
+    title = "B comparison (Fixed-effects models)"
+    ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    legend.position = "bottom"
+  ) +
+  facet_wrap(~Outcome) 
+
+plot_pr_ml <- 
+  
+  ratios |> 
+  filter(model == "Multilevel") |> 
+  mutate(Outcome = factor(Outcome, levels = outcome_order)) |> 
+  arrange(Outcome) |> 
+  ggplot(aes(x = PR_cc,
+             y = PR_mice, 
+             colour = Adjustment,
+             shape = Adjustment)) +
+  geom_abline(
+    intercept = 0,
+    slope = 1,
+    linetype = "dashed",
+    colour = "grey50"
+  ) +
+  geom_point(
+    size = 2.5,
+    alpha = 0.8
+  ) +
+  scale_colour_grey() +
+  labs(
+    x = "PRs from complete-case multilevel models",
+    y = "PRs from MICE multilevel models",
+    title = "PR comparison (Multilevel models)"
+    ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    legend.position = "bottom"
+  ) +
+  facet_wrap(~Outcome) 
+
+ratios |> 
+  ggplot(aes(x = se_ratio, fill = Adjustment)) + 
+  geom_histogram() + 
+  facet_wrap(vars(model))
+
+ratios |> 
+  mutate(beta_ratio = abs(beta_ratio)) |> 
+  ggplot(aes(x = beta_ratio, fill = Adjustment)) + 
+  geom_histogram() + 
+  facet_wrap(vars(model))
+
+ratios |> 
+  filter(Adjustment == "Adjusted") |> 
+  mutate(se_ratio_group = case_when(
+    se_ratio < 0.95 ~ "MICE >5% larger",
+    se_ratio > 1.15 ~ "CC >15% larger",
+    TRUE ~ "Within 5-15%"
+    ))  |> 
+  count(model, se_ratio_group)
+
+```
+
+```{r main forest plot, eval = FALSE}
+
+ml_betas_prs <- 
+  
+  imp_mods_all |> 
+  filter(model == "Multilevel")  |> 
+  select(Outcome, Exposure, Adjustment, imp, beta, PR) |> 
+  rename(beta_ml = beta,
+         pr_ml = PR)
+
+imp_mods_final <- 
+  
+  imp_mods_all  |> 
+  filter(model == "Robust SE") |> 
+  select(-beta, -PR, CI_u, CI_l) |>   # Drop the Robust SE beta
+  left_join(ml_betas_prs, 
+            by = c("Outcome", "Exposure", "Adjustment", "imp")) |> 
+  select(!c(CI_u, CI_l, Risk_Unexp, Risk_Exp)) |> 
+  rename(beta = beta_ml,
+         PR = pr_ml) |> 
+  mutate(CI_l = PR - 1.96*SE,
+         CI_u = PR + 1.96*SE)
+
+imp_mods_plot_prep <- 
+  
+  imp_mods_final |> 
+  mutate(Exposure = factor(Exposure, levels = exposure_order)) |> 
+  mutate(
+    Exposure = case_when(
+      Exposure == "work_8_dic"  ~ "Extended working hours",  
+      Exposure == "work_11_dic" ~ "Frequent night shifts",
+      Exposure == "work_12_dic" ~ "Regular shift work",
+      Exposure == "work_23_dic" ~ "Tight deadlines",
+      Exposure == "work_24_dic" ~ "Angry patients or relatives",
+      Exposure == "work_30_dic" ~ "Sexual harassment",
+      Exposure == "work_31_dic" ~ "Violent threats",
+      Exposure == "work_32_dic" ~ "Physical violence", 
+      Exposure == "work_33_dic" ~ "Bullying",
+      Exposure == "work_19_dic" ~ "Influence over work",
+      Exposure == "work_20_dic" ~ "Influence over work (breaks)",
+      Exposure == "work_21_dic" ~ "Colleague support",
+      Exposure == "work_22_dic" ~ "Support from superiors",
+      Exposure == "work_25_dic" ~ "Work council or union",
+      Exposure == "work_26_dic" ~ "Employee feedback",
+      Exposure == "work_27_dic" ~ "Stress action plan",
+      Exposure == "work_28_dic" ~ "Harassment protocol",
+      Exposure == "work_29_dic" ~ "Violence protocol",
+      TRUE ~ Exposure),
+    Outcome = case_when(
+      Outcome == "phq_co_poi" ~ "Depression",
+      Outcome == "gad_co_poi" ~ "Anxiety",
+      Outcome == "cage_co_poi" ~ "Alcohol dependence",
+      Outcome == "suic_idea_poi" ~ "Suicidal thoughts",
+      TRUE ~ Outcome
+    ),
+    Outcome = factor(Outcome, levels = outcome_order)
+  ) |> 
+  arrange(Outcome, Exposure) |> 
+  mutate(
+    Group = case_when(
+      Exposure %in% names(named_demands) ~ "Job demands",
+      Exposure %in% names(named_hazards) ~ "Job hazards",
+      Exposure %in% names(named_resources) ~ "Job resources",
+      Exposure %in% names(named_protocols) ~ "Organisational support structures",
+      TRUE ~ "Other"
+      ),
+    Group = factor(Group, levels = c("Job demands", "Job hazards", "Job resources", "Organisational support structures"))
+  ) |> 
+  filter(Adjustment == "Adjusted") |> 
+  rename(Lower = CI_l, Upper = CI_u) |> 
+  mutate(
+    Outcome = factor(Outcome, levels = outcome_order),
+    Exposure = factor(Exposure, levels = exposure_order_named),
+    PR_fmt = format(round(PR, 2), nsmall = 1, decimal.mark = "·"),
+    Low_fmt = format(round(Lower, 2), nsmall = 1, decimal.mark = "·"),
+    Up_fmt = format(round(Upper, 2), nsmall = 1, decimal.mark = "·")
+  ) |> 
+  arrange(Outcome, Exposure)
+
+#---- Plot ----
+
+# Generate forest plot function
+make_forest_plot <- 
+  function(df, target_outcome, show_y = TRUE) {
+  
+  p <- 
+    
+    df |>
+    filter(Outcome == target_outcome) |> 
+    ggplot(aes(x = PR, y = fct_rev(Exposure))) +
+    geom_point(size = 2.5) +
+    geom_linerange(aes(xmin = Lower, xmax = Upper)) +
+    geom_text(aes(x = 3, label = paste0(PR_fmt, " (", Low_fmt, "-", Up_fmt, ")")),
+              hjust = 1, size = 4) + 
+    
+    facet_grid(Group ~ ., scales = "free_y", space = "free_y", switch = "y") +
+    geom_vline(xintercept = 1, linetype = "dashed") +
+    
+    scale_x_log10(
+      breaks = c(0.2, 0.5, 1, 2),
+      labels = scales::label_number(accuracy = 0.1, decimal.mark = "·")
+    ) +
+    
+    labs(y = "", x = "Prevalence Ratio", title = target_outcome) + 
+    ggpubr::theme_pubr() + 
+    theme(
+      plot.title = element_text(hjust = 0.5, face = "bold", size = 12),
+      strip.placement = "outside",
+      strip.background.y = element_blank(),
+      strip.text.y.left = element_text(angle = 0, face = "bold", size = 10),
+      axis.text = element_text(size = 10),
+      axis.title.x = element_text(size = 10),
+      panel.border = element_rect(color = "black", fill = NA, linewidth = 0.5) 
+    )
+  
+  # RULE FOR THE RIGHT-SIDE PLOTS 
+  # If show_y is FALSE, we make the y-axis text and Group labels invisible
+  if (!show_y) {
+    p <- p + theme(
+      axis.text.y = element_blank(),      # Hides the exposure names
+      axis.ticks.y = element_blank(),     # Hides the little tick marks
+      strip.text.y.left = element_blank() # Hides the Group names
+    )
+  }
+  
+  return(p)
+  }
+
+# Left plots get the labels (show_y = TRUE is the default)
+p_dep <- make_forest_plot(imp_mods_plot_prep, "Depression", show_y = TRUE)
+p_alc <- make_forest_plot(imp_mods_plot_prep, "Alcohol dependence", show_y = TRUE)
+
+# Right plots hide the labels
+p_anx <- make_forest_plot(imp_mods_plot_prep, "Anxiety", show_y = FALSE)
+p_sui <- make_forest_plot(imp_mods_plot_prep, "Suicidal thoughts", show_y = FALSE)
+
+# Stitch them together!
+final_grid_adj <- (p_dep | p_anx) / (p_alc | p_sui)
+
+# View it
+final_grid_adj
+
+ragg::agg_png("out/figures/forest_adjusted_mice.png",
+              width = 9,
+              height = 7,
+              units = "in",
+              res = 600,
+              scaling = 0.5)
+
+print(final_grid_adj)
+
+dev.off()
+
+ggsave(final_grid_adj, 
+       filename = "forest_adjusted_mice.pdf",
+       device = "pdf",
+       path = "out/figures/",
+       scale = 3.5,
+       width = 140,
+       height = 100,
+       units = "mm",
+       dpi = 320
+       )
+
+rm(final_grid_adj)
+```
+
+# Main analyses with alternative methods
+
+## Generate models
+
+Set to eval = FALSE to avoid computation. This chunk loads generated RDS comparing
+all models
+
+```{r load methods summary}
+methods_summary <- readRDS("out/models/summary/methods_summary.RDS")
+```
+
+
+```{r exp-out prep comparison, eval = FALSE}
+
+# define outcomes, exposures, covariates
+
+out_poisson # Keep it this way as it is specified 1/0.
+
+# already defined
+
+demands_dic
+
+hazards_dic
+
+protocols_dic
+
+resources_dic
+
+covs_1
+
+covs_2
+
+# define strata
+
+profs <- levels(ds$work_2)
+
+# maps
+
+covariate_map <- list(
+  "base_covs" = covs_1
+)
+
+# Create grid with both families
+tasks <- expand_grid(
+  Outcome = out_poisson,
+  Family = c("poisson", "log-binomial", "logistic"), # Add new families
+  Exposure = all_exposures,
+  Covar_Key = "base_covs",      
+  profession = profs            
+)
+
+tasks_all <- expand_grid(
+  Outcome = out_poisson,
+  Family = c("poisson", "log-binomial", "logistic"), 
+  Exposure = all_exposures,
+  Covar_Key = "base_covs",
+  profession = "All"
+)
+
+#---- Computation ----
+
+# # Set up parallel processing (uses all cores minus whatever you want)
+plan(sequential)
+  
+```
+
+```{r exp-out all, eval = FALSE}
+exp_out_all <- future_pmap(list(
+  tasks_all$Outcome,
+  tasks_all$Family,
+  tasks_all$Exposure,
+  tasks_all$Covar_Key,
+  tasks_all$profession
+), function(outcome, family, exposure, cov_key, prof) {
+  
+  message(paste("Processing:", outcome, "x", exposure, "in", prof))
+
+  res_crude <- run_crude_mods(
+    data = ds,
+    outcome_var = outcome,
+    exposure_var = exposure,
+    profession = prof,
+    cluster_var = covs_2,
+    family_type = family
+  )
+
+  res_adj <- run_adj_mods(
+    data = ds,
+    outcome_var = outcome,
+    exposure_var = exposure,
+    profession = prof,
+    family_type = family,
+    cluster_var = covs_2,
+    confounder_list = covariate_map[[cov_key]],
+    model_label = "Adjusted"
+  )
+
+  # Combine internally
+  
+  row_multilevel <- 
+    
+    bind_rows(
+    res_crude$multilevel,
+      res_adj$multilevel
+    )
+  
+  row_robust <- 
+    
+    bind_rows(
+    res_crude$robust,
+      res_adj$robust
+    )
+  
+  # return as clean pair
+  
+  return(list(
+    multilevel = row_multilevel,
+    robust     = row_robust
+  ))
+}, .options = furrr_options(seed = TRUE))
+
+
+# Unzip and combine
+
+glm_multilevel_df <- map_dfr(exp_out_all, "multilevel")
+
+glm_robust_df <- map_dfr(exp_out_all, "robust")
+
+
+# Save
+
+saveRDS(glm_multilevel_df, "out/dataframes/glm_multilevel_df.rds")
+saveRDS(glm_robust_df, "out/dataframes/glm_robust_df.rds")
+```
+
+## Compare methods
+
+```{r merge robust se, eval = FALSE}
+robust_mods <- readRDS("out/dataframes/glm_robust_df.rds")
+ml_mods <- readRDS("out/dataframes/glm_multilevel_df.rds")
+
+# Join everything
+model_summary <-
+  
+  ml_mods |> 
+  bind_rows(robust_mods) |> 
+  select(-c(Profession, N_Analysis, starts_with("Risk"))) |>
+  mutate(model = if_else(model == "Robust SE", "Robust", "Standard")) |> 
+  pivot_wider(
+    names_from = model,
+    values_from = c(beta, SE, PR, CI_l, CI_u)
+  ) |> 
+  mutate(
+    SE = if_else(Family_Type == "poisson", SE_Robust, SE_Standard),
+    CI_l = if_else(Family_Type == "poisson", CI_l_Robust, CI_l_Standard),
+    CI_u = if_else(Family_Type == "poisson", CI_u_Robust, CI_u_Standard)
+    ) |> 
+  rename(beta = beta_Standard,
+         estimate = PR_Standard,
+         family = Family_Type) |> 
+  select(-ends_with(c("Standard", "Robust"))) |> 
+  mutate(
+    family = str_to_sentence(family),
+    family = if_else(family == "Poisson", "Poisson + Robust SE", family)
+  ) |> 
+  relocate(estimate, .after = SE)
+
+model_summary  
+
+saveRDS(model_summary, "out/dataframes/methods_summary.RDS")
+
+```
+
+```{r plots}
+# --- Prepare data ---
+
+# Outcome labels (reuse from your existing code)
+outcome_labels <- c(
+  "phq_co_poi"    = "Depression",
+  "gad_co_poi"    = "Anxiety",
+  "suic_idea_poi" = "Suicidal thoughts",
+  "cage_co_poi"   = "Alcohol dependence"
+)
+
+# Exposure short labels for the tile plot
+exposure_labels <- c(
+  "work_8_dic"  = "Long hours",
+  "work_11_dic" = "Night shifts",
+  "work_12_dic" = "Shift work",
+  "work_19_dic" = "Influence",
+  "work_20_dic" = "Breaks",
+  "work_21_dic" = "Colleague support",
+  "work_22_dic" = "Superior support",
+  "work_23_dic" = "Deadlines",
+  "work_24_dic" = "Angry patients",
+  "work_25_dic" = "Union/council",
+  "work_26_dic" = "Feedback",
+  "work_27_dic" = "Stress plan",
+  "work_28_dic" = "Harassment prot.",
+  "work_29_dic" = "Violence prot.",
+  "work_30_dic" = "Sexual harassment",
+  "work_31_dic" = "Violent threats",
+  "work_32_dic" = "Physical violence",
+  "work_33_dic" = "Bullying"
+)
+
+# Pivot to wide: one row per Outcome × Exposure × Adjustment
+comp_wide <- methods_summary |>
+  filter(family %in% c("Poisson + Robust SE", "Log-binomial")) |>
+  select(family, Outcome, Exposure, Adjustment, beta) |>
+  mutate(
+    Outcome   = recode(Outcome,   !!!outcome_labels),
+    Exposure  = recode(Exposure,  !!!exposure_labels),
+    Outcome   = factor(Outcome,   levels = unname(outcome_labels))
+  ) |>
+  pivot_wider(names_from = family, values_from = beta) |>
+  rename(beta_poisson = `Poisson + Robust SE`,
+         beta_logbin  = `Log-binomial`) |>
+  mutate(converged = !is.na(beta_logbin))
+
+# Convergence failure counts for annotation
+n_failed <- sum(!comp_wide$converged)
+n_total  <- nrow(comp_wide)
+pct_fail <- round(100 * n_failed / n_total)
+
+# ---- Panel A: scatter of betas ----
+
+panel_a <- comp_wide |>
+  filter(converged) |>
+  ggplot(aes(x = beta_poisson, y = beta_logbin, shape = Adjustment)) +
+  geom_abline(intercept = 0, slope = 1,
+              linetype = "dashed", colour = "grey50") +
+  geom_point(size = 2.5, alpha = 0.85, colour = "grey20") +
+  facet_wrap(~Outcome, nrow = 2) +
+  labs(
+    x     = "log(PR)  —  Poisson + Robust SE",
+    y     = "log(PR)  —  Log-binomial",
+    shape = "Adjustment",
+    tag   = "A"
+  ) +
+  coord_equal() +
+  theme_minimal(base_size = 11) +
+  theme(legend.position = "bottom",
+        panel.grid.minor = element_blank(),
+        strip.text = element_text(face = "bold"))
+
+# ---- Panel B: convergence failure tile ----
+
+panel_b <- comp_wide |>
+  # keep one row per Outcome × Exposure × Adjustment
+  mutate(
+    status = if_else(converged, "Converged", "Failed"),
+    Adjustment = factor(Adjustment, levels = c("Crude", "Adjusted"))
+  ) |>
+  ggplot(aes(x = Adjustment, y = Exposure, fill = status)) +
+  geom_tile(colour = "white", linewidth = 0.4) +
+  facet_wrap(~Outcome, nrow = 1) +
+  scale_fill_manual(
+    values = c("Converged" = "grey85", "Failed" = "#c0392b"),
+    name   = "Log-binomial"
+  ) +
+  labs(
+    x   = NULL,
+    y   = NULL,
+    tag = "B"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    axis.text.x  = element_text(angle = 30, hjust = 1),
+    axis.text.y  = element_text(size = 9),
+    legend.position = "bottom",
+    panel.grid   = element_blank(),
+    strip.text   = element_text(face = "bold")
+  )
+
+# ---- Combine and export ----
+
+fig_combined <- panel_a / panel_b +
+  plot_layout(heights = c(1.4, 1)) +
+  plot_annotation(
+    title    = "Comparison of Poisson + Robust SE and log-binomial models",
+    subtitle = glue(
+      "Panel A: log(PR) agreement where both models converged (n = {sum(comp_wide$converged)}).\n",
+      "Panel B: convergence status of log-binomial across all Outcome × Exposure × Adjustment combinations ",
+      "({n_failed}/{n_total} failed, {pct_fail}%)."
+    ),
+    theme = theme(
+      plot.title    = element_text(face = "bold", size = 13),
+      plot.subtitle = element_text(size = 10, colour = "grey30")
+    )
+  )
+
+ragg::agg_png(
+  "out/figures/sensitivity_logbinomial.png",
+  width = 9, height = 10, units = "in", res = 600, scaling = 0.55
+)
+print(fig_combined)
+dev.off()
+
+# ---- Scatter plot of SEs ----
+
+comp_wide_se <- 
+  
+  methods_summary |>
+  filter(family %in% c("Poisson + Robust SE", "Log-binomial")) |>
+  select(family, Outcome, Exposure, Adjustment, SE) |>
+  mutate(
+    Outcome   = recode(Outcome,   !!!outcome_labels),
+    Exposure  = recode(Exposure,  !!!exposure_labels),
+    Outcome   = factor(Outcome,   levels = unname(outcome_labels))
+  ) |>
+  pivot_wider(names_from = family, values_from = SE) |>
+  rename(SE_poisson = `Poisson + Robust SE`,
+         SE_logbin  = `Log-binomial`) |>
+  mutate(converged = !is.na(SE_logbin))
+
+se_plot <- comp_wide_se |>
+  filter(converged) |>
+  ggplot(aes(x = SE_poisson, y = SE_logbin, shape = Adjustment)) +
+  geom_abline(intercept = 0, slope = 1,
+              linetype = "dashed", colour = "grey50") +
+  geom_point(size = 2.5, alpha = 0.85, colour = "grey20") +
+  facet_wrap(~Outcome, nrow = 2) +
+  labs(
+    x     = "log(PR)  —  Poisson + Robust SE",
+    y     = "log(PR)  —  Log-binomial",
+    shape = "Adjustment",
+    tag   = "C"
+  ) +
+  coord_equal() +
+  theme_minimal(base_size = 11) +
+  theme(legend.position = "bottom",
+        panel.grid.minor = element_blank(),
+        strip.text = element_text(face = "bold")) +
+  xlim(0,0.15) +
+  ylim(0,0.15)
+
+ragg::agg_png(
+  "out/figures/sensitivity_logbinomial_SE.png",
+  width = 9, height = 10, units = "in", res = 600, scaling = 0.55
+)
+print(se_plot)
+dev.off()
+```

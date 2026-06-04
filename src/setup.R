@@ -33,3 +33,9 @@ library(sjlabelled)
 library(rlang)
 library(tidyverse)
 
+# missing data & mice
+
+library(mice)
+library(VIM)
+library(naniar)
+library(sandwich)
