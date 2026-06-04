@@ -26,6 +26,10 @@ project-root/
 
 ├── analysis.html
 
+├── R1_Lancet.Rmd
+
+├── R1_Lancet.html
+
 └── README.md
 
 ### Description
@@ -52,6 +56,12 @@ project-root/
   Main R Markdown file containing the analysis workflow.
 
 - **`analysis.html`**  
+  Rendered output of `analysis.Rmd`, provided so users can view results without access to the raw data.
+
+- **`R1_Lancet.Rmd`**  
+  Supplementary R Markdown file containing the analysis workflow of first manuscript revision.
+
+- **`R1_Lancet.html`**  
   Rendered output of `analysis.Rmd`, provided so users can view results without access to the raw data.
 
 - **`README.md`**  
